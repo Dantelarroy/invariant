@@ -1,0 +1,22 @@
+# Local development services for Invariant.
+# Start: docker compose up -d   ·   Stop: docker compose down
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: invariant-postgres
+    environment:
+      POSTGRES_USER: invariant
+      POSTGRES_PASSWORD: invariant_local_only
+      POSTGRES_DB: invariant
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U invariant -d invariant"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:
