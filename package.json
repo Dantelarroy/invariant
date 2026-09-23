@@ -8,7 +8,9 @@
     "format": "biome format --write .",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
-    "prepare": "husky"
+    "prepare": "husky",
+    "db:generate": "pnpm --filter @invariant/db generate",
+    "db:migrate": "pnpm --filter @invariant/db migrate"
   },
   "packageManager": "pnpm@10.29.2",
   "devDependencies": {
