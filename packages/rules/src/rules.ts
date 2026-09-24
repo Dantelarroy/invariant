@@ -60,7 +60,10 @@ export const linesSum: Rule = {
   severity: "error",
   check: (invoice) => {
     const sum = invoice.lines.reduce((acc, l) => acc + l.lineTotalCents, 0);
-    if (sum === invoice.taxBaseCents) return [];
+    // Invoicing software often rounds each printed line but computes the base
+    // from unrounded amounts, so up to half a cent per line may separate them.
+    const tolerance = Math.floor((invoice.lines.length + 1) / 2);
+    if (Math.abs(sum - invoice.taxBaseCents) <= tolerance) return [];
     return [
       {
         message: `Lines add up to ${formatMoney(sum)} but the tax base is ${formatMoney(invoice.taxBaseCents)}.`,

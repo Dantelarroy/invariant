@@ -10,7 +10,7 @@ The rules decide three things: whether an extraction can be trusted without a pe
 - `@invariant/rules` is a pure package: `verifyInvoice(invoice)` runs a list of `Rule`s and returns `{ valid, score, violations }`. No I/O and no model calls.
 - Each violation carries a rule id, a severity, a human-readable message (shown to the reviewer) and a path to the field (usable later for targeted repair).
 - **Severity.** `error` blocks automatic acceptance; `warning` is reported but does not block. Line amounts (quantity × unit price) are warnings until line discounts are modelled.
-- **Tolerance.** One cent for line amounts and VAT, to absorb printed rounding. Sums of lines and the final total must match exactly.
+- **Tolerance.** One cent for line amounts and VAT, to absorb printed rounding. The lines may differ from the tax base by up to half a cent per line (rounded down, over n + 1 lines): real invoicing software (FacturaScripts, observed on 2026-09-24) rounds each printed line but computes the base from unrounded amounts. The final total must match exactly.
 - **VAT** is recomputed per rate group (base of the group × rate, rounded half away from zero with integer arithmetic), because Spanish invoices print one VAT amount per rate.
 - **Allowed rates:** 0, 4, 10 and 21 %. 5 % is accepted only for invoices issued up to 2024-12-31, when it was temporarily in force.
 - **Score** is the share of rules that hold (0–1). It is deliberately simple and dense, which makes it usable as an RL reward.
