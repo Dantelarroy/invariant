@@ -8,7 +8,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "generate": "tsx src/cli/generate.ts"
+    "generate": "tsx src/cli/generate.ts",
+    "erp:setup": "tsx src/cli/erp-setup.ts",
+    "generate:erp": "tsx src/cli/generate-erp.ts"
   },
   "dependencies": {
     "@invariant/rules": "workspace:*",

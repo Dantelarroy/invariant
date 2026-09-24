@@ -14,7 +14,11 @@
     "extract:text": "pnpm --filter @invariant/api extract:text",
     "review": "pnpm --filter @invariant/api review",
     "py:check": "cd python/data && uv run --frozen ruff check . && uv run --frozen ruff format --check . && uv run --frozen pytest -q",
-    "synth": "pnpm --filter @invariant/synth generate"
+    "synth": "pnpm --filter @invariant/synth generate",
+    "erp:up": "docker compose -f infra/erp/docker-compose.yml up -d",
+    "erp:down": "docker compose -f infra/erp/docker-compose.yml down",
+    "erp:setup": "pnpm --filter @invariant/synth erp:setup",
+    "synth:erp": "pnpm --filter @invariant/synth generate:erp"
   },
   "packageManager": "pnpm@10.29.2",
   "devDependencies": {
