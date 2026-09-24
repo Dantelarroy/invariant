@@ -8,6 +8,13 @@
       "when": 1790162426170,
       "tag": "0000_init_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790240730407,
+      "tag": "0001_add_invoices",
+      "breakpoints": true
     }
   ]
 }
