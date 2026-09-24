@@ -10,7 +10,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/google": "^4.0.79",
     "@invariant/schema": "workspace:*",
     "ai": "^7.0.113",
     "zod": "^4.6.5"

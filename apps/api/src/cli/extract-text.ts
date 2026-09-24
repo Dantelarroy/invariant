@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
-import { google } from "@ai-sdk/google";
+import { openai } from "@ai-sdk/openai";
 import { createDb } from "@invariant/db";
 import { formatMoney } from "@invariant/schema";
 import { processTextDocument } from "../process-text-document.js";
@@ -16,17 +16,17 @@ if (!file) {
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is not set (see .env.example)");
-if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-  throw new Error("GOOGLE_GENERATIVE_AI_API_KEY is not set (see .env.example)");
+if (!process.env.OPENAI_API_KEY) {
+  throw new Error("OPENAI_API_KEY is not set (see .env.example)");
 }
 
-const modelId = process.env.EXTRACTION_MODEL ?? "gemini-2.5-flash";
+const modelId = process.env.EXTRACTION_MODEL ?? "gpt-5-mini";
 const { db, close } = createDb(databaseUrl);
 
 try {
   const outcome = await processTextDocument(
     db,
-    google(modelId),
+    openai(modelId),
     readFileSync(file, "utf8"),
     basename(file),
   );
