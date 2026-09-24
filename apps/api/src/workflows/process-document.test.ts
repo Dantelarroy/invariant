@@ -137,7 +137,7 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
       ),
     );
     if (paused.kind !== "needs_review") throw new Error(`got ${paused.kind}`);
-    expect(paused.issues.map((i) => i.code)).toEqual(["TOTAL_MISMATCH"]);
+    expect(paused.issues.map((i) => i.ruleId)).toEqual(["total"]);
     expect(await statusOf(paused.documentId)).toBe("needs_review");
 
     // A brand-new instance: the paused state must come from Postgres, not memory.

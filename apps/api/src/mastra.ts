@@ -2,6 +2,7 @@ import type { Db } from "@invariant/db";
 import { Mastra } from "@mastra/core";
 import { PostgresStore } from "@mastra/pg";
 import type { LanguageModel } from "ai";
+import type { z } from "zod";
 import {
   createProcessDocumentWorkflow,
   HUMAN_REVIEW_STEP_ID,
@@ -42,7 +43,7 @@ export type RunResult =
       kind: "needs_review";
       runId: string;
       documentId: string;
-      issues: { code: string; message: string }[];
+      issues: z.infer<typeof ReviewRequestSchema>["issues"];
       question: string;
     };
 

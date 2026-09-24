@@ -12,6 +12,7 @@
     "@ai-sdk/openai": "^4.0.74",
     "@invariant/db": "workspace:*",
     "@invariant/extractor": "workspace:*",
+    "@invariant/rules": "workspace:*",
     "@invariant/schema": "workspace:*",
     "@mastra/core": "1.69.0",
     "@mastra/pg": "1.26.0",
