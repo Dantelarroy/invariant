@@ -8,7 +8,7 @@
     "extract:text": "tsx src/cli/extract-text.ts"
   },
   "dependencies": {
-    "@ai-sdk/google": "^4.0.79",
+    "@ai-sdk/openai": "^4.0.74",
     "@invariant/db": "workspace:*",
     "@invariant/extractor": "workspace:*",
     "@invariant/schema": "workspace:*",
