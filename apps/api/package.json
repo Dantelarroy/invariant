@@ -5,17 +5,20 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "extract:text": "tsx src/cli/extract-text.ts"
+    "extract:text": "tsx src/cli/extract-text.ts",
+    "review": "tsx src/cli/review.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.74",
     "@invariant/db": "workspace:*",
     "@invariant/extractor": "workspace:*",
     "@invariant/schema": "workspace:*",
-    "ai": "^7.0.113"
+    "@mastra/core": "1.69.0",
+    "@mastra/pg": "1.26.0",
+    "ai": "^7.0.113",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "drizzle-orm": "^0.45.3",
     "tsx": "^4.23.15"
   }
 }
