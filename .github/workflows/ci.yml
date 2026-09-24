@@ -53,6 +53,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Install Chromium for rendering tests
+        run: pnpm --filter @invariant/synth exec playwright install --with-deps chromium
+
       - name: Apply database migrations
         run: pnpm db:migrate
 
