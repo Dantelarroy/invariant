@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { Db } from "./client.js";
 import { type Document, documents } from "./schema.js";
 
@@ -14,6 +14,15 @@ export async function findDocumentBySha256(
     .select()
     .from(documents)
     .where(eq(documents.sha256, sha256));
+  return row;
+}
+
+/** Returns the document with this id, if it exists. */
+export async function findDocumentById(
+  db: Db,
+  id: string,
+): Promise<Document | undefined> {
+  const [row] = await db.select().from(documents).where(eq(documents.id, id));
   return row;
 }
 
@@ -42,4 +51,10 @@ export async function setDocumentStatus(
     .update(documents)
     .set({ status, updatedAt: new Date() })
     .where(eq(documents.id, id));
+}
+
+/** Deletes documents by id; their invoices and lines go with them (cascade). */
+export async function deleteDocuments(db: Db, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await db.delete(documents).where(inArray(documents.id, ids));
 }

@@ -1,6 +1,7 @@
 import type { Invoice } from "@invariant/schema";
+import { eq } from "drizzle-orm";
 import type { Db } from "./client.js";
-import { invoiceLines, invoices } from "./schema.js";
+import { invoiceLines, invoices, type StoredInvoice } from "./schema.js";
 
 /**
  * Persists an extracted invoice and its lines for a document, atomically.
@@ -50,4 +51,16 @@ export async function saveInvoice(
 
     return row.id;
   });
+}
+
+/** Returns the invoice extracted from a document, if one was stored. */
+export async function findInvoiceByDocumentId(
+  db: Db,
+  documentId: string,
+): Promise<StoredInvoice | undefined> {
+  const [row] = await db
+    .select()
+    .from(invoices)
+    .where(eq(invoices.documentId, documentId));
+  return row;
 }
