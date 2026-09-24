@@ -18,7 +18,7 @@ const valid: Invoice = {
   number: "F-2026-0042",
   issueDate: "2026-09-24",
   currency: "EUR",
-  supplier: { name: "Aceites García SL", taxId: "B12345678" },
+  supplier: { name: "Aceites García SL", taxId: "B12345674" },
   customer: { name: "Restaurante Sol" },
   lines: [
     line({
@@ -39,12 +39,13 @@ const valid: Invoice = {
   totalCents: 6912,
 };
 
+const TODAY = "2026-09-24";
 const ruleIds = (inv: Invoice) =>
-  verifyInvoice(inv).violations.map((v) => v.ruleId);
+  verifyInvoice(inv, { today: TODAY }).violations.map((v) => v.ruleId);
 
 describe("verifyInvoice", () => {
   it("accepts an invoice where every rule holds, with a score of 1", () => {
-    const result = verifyInvoice(valid);
+    const result = verifyInvoice(valid, { today: TODAY });
     expect(result.violations).toEqual([]);
     expect(result.valid).toBe(true);
     expect(result.score).toBe(1);
@@ -59,7 +60,7 @@ describe("verifyInvoice", () => {
           line({ ...valid.lines[1], lineTotalCents: 350 }),
         ],
       };
-      const result = verifyInvoice(inv);
+      const result = verifyInvoice(inv, { today: TODAY });
       expect(result.violations).toContainEqual(
         expect.objectContaining({
           ruleId: "line-amount",
@@ -98,7 +99,7 @@ describe("verifyInvoice", () => {
         vatAmountCents: 552,
         totalCents: 6252,
       };
-      const result = verifyInvoice(inv);
+      const result = verifyInvoice(inv, { today: TODAY });
       expect(result.violations.map((v) => [v.ruleId, v.severity])).toEqual([
         ["line-amount", "warning"],
       ]);
@@ -186,7 +187,10 @@ describe("verifyInvoice", () => {
   });
 
   it("does not crash on an invoice without lines; header rules still run", () => {
-    const result = verifyInvoice({ ...valid, lines: [], totalCents: 1 });
+    const result = verifyInvoice(
+      { ...valid, lines: [], totalCents: 1 },
+      { today: TODAY },
+    );
     expect(result.violations.map((v) => v.ruleId)).toEqual([
       "lines-sum",
       "vat-amount",
@@ -195,8 +199,48 @@ describe("verifyInvoice", () => {
   });
 
   it("scores the share of rules that passed, for evals and as an RL reward", () => {
-    const result = verifyInvoice({ ...valid, totalCents: 7012 });
+    const result = verifyInvoice(
+      { ...valid, totalCents: 7012 },
+      { today: TODAY },
+    );
     expect(result.valid).toBe(false);
-    expect(result.score).toBeCloseTo(4 / 5);
+    expect(result.score).toBeCloseTo(6 / 7);
+  });
+
+  describe("tax ids", () => {
+    it("requires the supplier's tax id (Spanish invoicing regulation, RD 1619/2012)", () => {
+      expect(
+        ruleIds({ ...valid, supplier: { name: "Aceites García SL" } }),
+      ).toEqual(["tax-ids"]);
+    });
+
+    it("rejects a supplier tax id with a wrong check character", () => {
+      const result = verifyInvoice(
+        { ...valid, supplier: { name: "X", taxId: "B12345678" } },
+        { today: TODAY },
+      );
+      expect(result.violations).toEqual([
+        expect.objectContaining({ ruleId: "tax-ids", path: "supplier.taxId" }),
+      ]);
+    });
+
+    it("checks the customer's tax id only when present (simplified invoices omit it)", () => {
+      expect(ruleIds({ ...valid, customer: { name: "Cliente" } })).toEqual([]);
+      expect(
+        ruleIds({ ...valid, customer: { name: "C", taxId: "12345678A" } }),
+      ).toEqual(["tax-ids"]);
+    });
+  });
+
+  describe("issue date", () => {
+    it("rejects an invoice dated in the future", () => {
+      expect(ruleIds({ ...valid, issueDate: "2026-09-25" })).toEqual([
+        "issue-date",
+      ]);
+    });
+
+    it("accepts an invoice dated today", () => {
+      expect(ruleIds({ ...valid, issueDate: TODAY })).toEqual([]);
+    });
   });
 });
