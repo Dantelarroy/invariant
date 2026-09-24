@@ -7,15 +7,20 @@ import {
   setDocumentStatus,
 } from "@invariant/db";
 import { extractInvoiceFromText } from "@invariant/extractor";
+import { verifyInvoice } from "@invariant/rules";
 import { InvoiceSchema } from "@invariant/schema";
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import type { LanguageModel } from "ai";
 import { z } from "zod";
-import { checkTotals } from "./check-totals.js";
 
 export const HUMAN_REVIEW_STEP_ID = "human-review";
 
-const IssueSchema = z.object({ code: z.string(), message: z.string() });
+const IssueSchema = z.object({
+  ruleId: z.string(),
+  severity: z.enum(["error", "warning"]),
+  message: z.string(),
+  path: z.string().optional(),
+});
 
 /** Final result of a run. Every run ends in exactly one of these. */
 export const OutcomeSchema = z.discriminatedUnion("kind", [
@@ -130,11 +135,11 @@ export function createProcessDocumentWorkflow(deps: {
     outputSchema: VerifiedSchema,
     execute: async ({ inputData }) => ({
       ...inputData,
-      issues: checkTotals(inputData.invoice),
+      issues: verifyInvoice(inputData.invoice).violations,
     }),
   });
 
-  // Ask instead of guess: if any check fails, the run pauses (its state is
+  // Ask instead of guess: if any rule fails with an error, the run pauses (its state is
   // saved in Postgres) until a person approves or rejects the extraction.
   const humanReview = createStep({
     id: HUMAN_REVIEW_STEP_ID,
@@ -144,7 +149,8 @@ export function createProcessDocumentWorkflow(deps: {
     resumeSchema: ReviewDecisionSchema,
     execute: async ({ inputData, resumeData, suspend }) => {
       const { issues, ...extracted } = inputData;
-      if (issues.length === 0) {
+      // Warnings are kept in the run but only errors need a person.
+      if (!issues.some((issue) => issue.severity === "error")) {
         return { ...extracted, approved: true, reviewedBy: "rules" };
       }
       if (!resumeData) {
@@ -153,7 +159,7 @@ export function createProcessDocumentWorkflow(deps: {
           documentId: extracted.documentId,
           issues,
           question:
-            "The extracted numbers do not add up. Is the extraction faithful to the document?",
+            "Some business rules fail. Is the extraction faithful to the document?",
         });
       }
       return {
