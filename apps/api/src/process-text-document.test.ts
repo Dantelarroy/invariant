@@ -28,6 +28,14 @@ const invoice: Invoice = {
   totalCents: 1210,
 };
 
+/** What a strict structured-output model returns: optional fields as explicit nulls. */
+const modelOutput = {
+  ...invoice,
+  supplier: { name: "Proveedor SL", taxId: null },
+  customer: { name: "Cliente SL", taxId: null },
+  withholdingCents: null,
+};
+
 function mockModelAnswering(json: unknown) {
   return new MockLanguageModelV4({
     doGenerate: {
@@ -62,7 +70,7 @@ describe.skipIf(!databaseUrl)("processTextDocument (integration)", () => {
 
     const first = await processTextDocument(
       db,
-      mockModelAnswering(invoice),
+      mockModelAnswering(modelOutput),
       text,
     );
     createdIds.push(first.documentId);
@@ -70,7 +78,7 @@ describe.skipIf(!databaseUrl)("processTextDocument (integration)", () => {
 
     const second = await processTextDocument(
       db,
-      mockModelAnswering(invoice),
+      mockModelAnswering(modelOutput),
       text,
     );
     expect(second).toEqual({ kind: "duplicate", documentId: first.documentId });
@@ -95,5 +103,24 @@ describe.skipIf(!databaseUrl)("processTextDocument (integration)", () => {
         .digest("hex"),
     );
     expect(doc?.status).toBe("rejected");
+  });
+
+  it("retries a previously rejected document instead of treating it as a duplicate", async () => {
+    const text = `retry ${randomUUID()}`;
+
+    const failed = await processTextDocument(
+      db,
+      mockModelAnswering({ nonsense: true }),
+      text,
+    );
+    createdIds.push(failed.documentId);
+    const retried = await processTextDocument(
+      db,
+      mockModelAnswering(modelOutput),
+      text,
+    );
+
+    expect(retried.kind).toBe("extracted");
+    expect(retried.documentId).toBe(failed.documentId);
   });
 });

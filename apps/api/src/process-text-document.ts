@@ -33,14 +33,20 @@ export async function processTextDocument(
   const sha256 = createHash("sha256").update(text).digest("hex");
 
   const existing = await findDocumentBySha256(db, sha256);
-  if (existing) return { kind: "duplicate", documentId: existing.id };
+  if (existing && existing.status !== "rejected") {
+    return { kind: "duplicate", documentId: existing.id };
+  }
 
-  const doc = await createDocument(db, {
-    sha256,
-    source: "upload",
-    status: "processing",
-    filename: filename ?? null,
-  });
+  // A previously rejected document may be retried (e.g. after fixing a prompt or provider issue).
+  const doc =
+    existing ??
+    (await createDocument(db, {
+      sha256,
+      source: "upload",
+      status: "processing",
+      filename: filename ?? null,
+    }));
+  if (existing) await setDocumentStatus(db, doc.id, "processing");
 
   try {
     const { invoice, promptVersion } = await extractInvoiceFromText(

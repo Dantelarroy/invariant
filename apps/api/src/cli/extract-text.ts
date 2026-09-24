@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { basename } from "node:path";
+import { basename, resolve } from "node:path";
 import { openai } from "@ai-sdk/openai";
 import { createDb } from "@invariant/db";
 import { formatMoney } from "@invariant/schema";
@@ -8,11 +8,13 @@ import { processTextDocument } from "../process-text-document.js";
 const envPath = new URL("../../../../.env", import.meta.url).pathname;
 if (existsSync(envPath)) process.loadEnvFile(envPath);
 
-const file = process.argv[2];
-if (!file) {
+const fileArg = process.argv[2];
+if (!fileArg) {
   console.error("Usage: pnpm extract:text <path-to-invoice.txt>");
   process.exit(1);
 }
+// pnpm runs the script inside apps/api; INIT_CWD is where the user typed the command.
+const file = resolve(process.env.INIT_CWD ?? process.cwd(), fileArg);
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is not set (see .env.example)");
