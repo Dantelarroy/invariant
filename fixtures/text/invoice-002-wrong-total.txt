@@ -1,9 +1,9 @@
-DISTRIBUCIONES LEVANTE S.L.        CIF: B46123456
+DISTRIBUCIONES LEVANTE S.L.        CIF: B46123451
 Av. del Puerto 45, 46021 Valencia
 
 FACTURA Nº DL-2026-0317               Fecha: 22/09/2026
 
-Cliente: Restaurante Sol · CIF B87654321
+Cliente: Restaurante Sol · CIF B87654323
 
 Descripción                          Cant.   Precio    Importe
 Servilletas de papel (caja 500 u.)    4      12,50 €    50,00 €
