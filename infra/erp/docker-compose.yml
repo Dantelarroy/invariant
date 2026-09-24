@@ -1,0 +1,30 @@
+# FacturaScripts (open-source Spanish invoicing software) used as a data source:
+# we create invoices through its API and keep the PDFs it prints.
+# Local only. Start with `pnpm erp:up`, then `pnpm erp:setup` once.
+name: invariant-erp
+
+services:
+  facturascripts:
+    image: facturascripts/facturascripts:2026.65
+    ports:
+      - "127.0.0.1:8081:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./bootstrap-tables.php:/opt/invariant/bootstrap-tables.php:ro
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: erp_local_only
+      MYSQL_DATABASE: facturascripts
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-uroot", "-perp_local_only"]
+      interval: 3s
+      retries: 30
+    volumes:
+      - erp-mysql:/var/lib/mysql
+
+volumes:
+  erp-mysql:
