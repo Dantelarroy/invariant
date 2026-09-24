@@ -25,6 +25,8 @@ pnpm db:migrate
 pnpm extract:text fixtures/text/invoice-001.txt   # needs OPENAI_API_KEY in .env
 pnpm review <run-id> approve|reject        # answer a paused run
 pnpm synth --count 50                      # synthetic Spanish invoices in data/synth
+pnpm erp:up && pnpm erp:setup              # local FacturaScripts (real invoicing software)
+pnpm synth:erp --count 50                  # invoices printed by FacturaScripts in data/synth-erp
 ```
 
 Conventions live in [`AGENTS.md`](./AGENTS.md).
