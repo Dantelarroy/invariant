@@ -21,7 +21,7 @@ const invoice: Invoice = {
   number: "F-1",
   issueDate: "2026-09-24",
   currency: "EUR",
-  supplier: { name: "Proveedor SL" },
+  supplier: { name: "Proveedor SL", taxId: "B12345674" },
   customer: { name: "Cliente SL" },
   lines: [
     {
@@ -41,8 +41,8 @@ const invoice: Invoice = {
 function modelOutputFor(inv: Invoice) {
   return {
     ...inv,
-    supplier: { name: inv.supplier.name, taxId: null },
-    customer: { name: inv.customer.name, taxId: null },
+    supplier: { name: inv.supplier.name, taxId: inv.supplier.taxId ?? null },
+    customer: { name: inv.customer.name, taxId: inv.customer.taxId ?? null },
     withholdingCents: null,
   };
 }

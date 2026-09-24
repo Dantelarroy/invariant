@@ -7,7 +7,7 @@ const invoice: Invoice = {
   number: "F-2026-0042",
   issueDate: "2026-09-24",
   currency: "EUR",
-  supplier: { name: "Aceites García SL", taxId: "B12345678" },
+  supplier: { name: "Aceites García SL", taxId: "B12345674" },
   customer: { name: "Restaurante Sol" },
   lines: [
     {

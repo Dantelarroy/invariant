@@ -5,7 +5,7 @@ const output: ModelInvoice = {
   number: "F-1",
   issueDate: "2026-09-24",
   currency: "EUR",
-  supplier: { name: "Proveedor SL", taxId: "B12345678" },
+  supplier: { name: "Proveedor SL", taxId: "B12345674" },
   customer: { name: "Cliente SL", taxId: null },
   lines: [
     {
@@ -28,7 +28,7 @@ describe("toInvoice", () => {
 
     expect(invoice.customer).toEqual({ name: "Cliente SL" });
     expect("withholdingCents" in invoice).toBe(false);
-    expect(invoice.supplier.taxId).toBe("B12345678");
+    expect(invoice.supplier.taxId).toBe("B12345674");
   });
 
   it("keeps a present withholding amount", () => {
