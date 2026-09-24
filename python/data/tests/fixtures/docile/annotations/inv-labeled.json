@@ -1,0 +1,76 @@
+{
+  "field_extractions": [
+    {
+      "bbox": [0.7, 0.1, 0.85, 0.12],
+      "fieldtype": "document_id",
+      "page": 0,
+      "text": "INV-1001"
+    },
+    {
+      "bbox": [0.7, 0.13, 0.85, 0.15],
+      "fieldtype": "date_issue",
+      "page": 0,
+      "text": "03/02/2021"
+    },
+    {
+      "bbox": [0.1, 0.05, 0.4, 0.08],
+      "fieldtype": "vendor_name",
+      "page": 0,
+      "text": "Example Supplies Ltd"
+    },
+    {
+      "bbox": [0.75, 0.8, 0.9, 0.82],
+      "fieldtype": "amount_total_gross",
+      "page": 0,
+      "text": "1,210.00"
+    }
+  ],
+  "line_item_extractions": [
+    {
+      "bbox": [0.1, 0.4, 0.5, 0.42],
+      "fieldtype": "line_item_description",
+      "line_item_id": 2,
+      "page": 0,
+      "text": "Cable"
+    },
+    {
+      "bbox": [0.75, 0.4, 0.9, 0.42],
+      "fieldtype": "line_item_amount_gross",
+      "line_item_id": 2,
+      "page": 0,
+      "text": "210.00"
+    },
+    {
+      "bbox": [0.1, 0.37, 0.5, 0.39],
+      "fieldtype": "line_item_description",
+      "line_item_id": 1,
+      "page": 0,
+      "text": "Monitor"
+    },
+    {
+      "bbox": [0.6, 0.37, 0.65, 0.39],
+      "fieldtype": "line_item_quantity",
+      "line_item_id": 1,
+      "page": 0,
+      "text": "2"
+    },
+    {
+      "bbox": [0.75, 0.37, 0.9, 0.39],
+      "fieldtype": "line_item_amount_gross",
+      "line_item_id": 1,
+      "page": 0,
+      "text": "1,000.00"
+    }
+  ],
+  "line_item_headers": [],
+  "metadata": {
+    "cluster_id": 7,
+    "currency": "usd",
+    "document_type": "tax_invoice",
+    "language": "eng",
+    "original_filename": "example-1",
+    "page_count": 1,
+    "page_sizes_at_200dpi": [[1654, 2339]],
+    "page_to_table_grid": {}
+  }
+}
