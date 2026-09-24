@@ -1,0 +1,21 @@
+{
+  "name": "@invariant/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "extract:text": "tsx src/cli/extract-text.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^4.0.79",
+    "@invariant/db": "workspace:*",
+    "@invariant/extractor": "workspace:*",
+    "@invariant/schema": "workspace:*",
+    "ai": "^7.0.113"
+  },
+  "devDependencies": {
+    "drizzle-orm": "^0.45.3",
+    "tsx": "^4.23.15"
+  }
+}

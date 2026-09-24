@@ -1,0 +1,16 @@
+ACEITES GARCÍA S.L.            CIF: B12345678
+C/ Olivar 12, 23001 Jaén
+
+FACTURA Nº F-2026-0042                Fecha: 24/09/2026
+
+Cliente: Restaurante Sol · CIF B87654321
+
+Descripción                          Cant.   Precio    Importe
+Aceite de oliva virgen extra 5 L      2      30,00 €    60,00 €
+Harina de trigo 1,5 kg               1,5      2,00 €     3,00 €
+
+Base imponible IVA 10 %                                60,00 €
+Base imponible IVA 4 %                                  3,00 €
+Cuota IVA 10 %                                          6,00 €
+Cuota IVA 4 %                                           0,12 €
+TOTAL FACTURA                                          69,12 €
