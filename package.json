@@ -10,7 +10,8 @@
     "test": "vitest run",
     "prepare": "husky",
     "db:generate": "pnpm --filter @invariant/db generate",
-    "db:migrate": "pnpm --filter @invariant/db migrate"
+    "db:migrate": "pnpm --filter @invariant/db migrate",
+    "extract:text": "pnpm --filter @invariant/api extract:text"
   },
   "packageManager": "pnpm@10.29.2",
   "devDependencies": {
