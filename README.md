@@ -8,7 +8,7 @@ Invoices obey rules that can be checked without knowing the right answer: line i
 2. **Evaluate without labels.** The rule pass rate is an online quality metric.
 3. **Train a small model with RL.** Rules become the reward (GRPO), so unlabeled documents can be used for training.
 
-**Status:** day 1. Monorepo bootstrap and the first package (`@invariant/schema`).
+**Status:** day 5. Text invoices go through a mastra workflow (ingest → extract → verify → human review → persist) into Postgres.
 
 ## Development
 
@@ -19,6 +19,11 @@ pnpm install
 pnpm lint        # Biome checks
 pnpm typecheck   # TypeScript in every package
 pnpm test        # Vitest
+
+docker compose up -d                       # Postgres on localhost:5433
+pnpm db:migrate
+pnpm extract:text fixtures/text/invoice-001.txt   # needs OPENAI_API_KEY in .env
+pnpm review <run-id> approve|reject        # answer a paused run
 ```
 
 Conventions live in [`AGENTS.md`](./AGENTS.md).
