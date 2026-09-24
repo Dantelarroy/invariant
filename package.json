@@ -13,7 +13,8 @@
     "db:migrate": "pnpm --filter @invariant/db migrate",
     "extract:text": "pnpm --filter @invariant/api extract:text",
     "review": "pnpm --filter @invariant/api review",
-    "py:check": "cd python/data && uv run --frozen ruff check . && uv run --frozen ruff format --check . && uv run --frozen pytest -q"
+    "py:check": "cd python/data && uv run --frozen ruff check . && uv run --frozen ruff format --check . && uv run --frozen pytest -q",
+    "synth": "pnpm --filter @invariant/synth generate"
   },
   "packageManager": "pnpm@10.29.2",
   "devDependencies": {
