@@ -41,6 +41,9 @@ importers:
       '@invariant/extractor':
         specifier: workspace:*
         version: link:../../packages/extractor
+      '@invariant/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
       '@invariant/schema':
         specifier: workspace:*
         version: link:../../packages/schema
@@ -88,6 +91,12 @@ importers:
       zod:
         specifier: ^4.6.5
         version: 4.6.5
+
+  packages/rules:
+    dependencies:
+      '@invariant/schema':
+        specifier: workspace:*
+        version: link:../schema
 
   packages/schema:
     dependencies:
