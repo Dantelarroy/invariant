@@ -11,7 +11,8 @@
     "prepare": "husky",
     "db:generate": "pnpm --filter @invariant/db generate",
     "db:migrate": "pnpm --filter @invariant/db migrate",
-    "extract:text": "pnpm --filter @invariant/api extract:text"
+    "extract:text": "pnpm --filter @invariant/api extract:text",
+    "review": "pnpm --filter @invariant/api review"
   },
   "packageManager": "pnpm@10.29.2",
   "devDependencies": {
