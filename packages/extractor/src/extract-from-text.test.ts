@@ -43,9 +43,16 @@ function mockModelAnswering(json: unknown) {
   });
 }
 
+/** What a strict structured-output model returns: optional fields as explicit nulls. */
+const modelOutput = {
+  ...invoice,
+  customer: { name: "Restaurante Sol", taxId: null },
+  withholdingCents: null,
+};
+
 describe("extractInvoiceFromText", () => {
   it("returns the validated invoice, prompt version and token usage", async () => {
-    const model = mockModelAnswering(invoice);
+    const model = mockModelAnswering(modelOutput);
 
     const result = await extractInvoiceFromText(
       "FACTURA F-2026-0042 ...",
@@ -58,7 +65,7 @@ describe("extractInvoiceFromText", () => {
   });
 
   it("sends the instructions as system prompt and the document as user prompt", async () => {
-    const model = mockModelAnswering(invoice);
+    const model = mockModelAnswering(modelOutput);
 
     await extractInvoiceFromText("FACTURA F-2026-0042 ...", model);
 
