@@ -107,6 +107,66 @@ describe("verifyInvoice", () => {
     });
   });
 
+  it("tolerates half a cent per line, as real invoicing software rounds the base once", () => {
+    // Printed by FacturaScripts: lines 87,84 € but base 87,83 € (13,2 × 2,33 = 30,756 € shown as 30,76 €).
+    const lines = [
+      line({
+        quantity: 3,
+        unitPriceCents: 140,
+        lineTotalCents: 420,
+        vatRateBps: 400,
+      }),
+      line({
+        quantity: 3,
+        unitPriceCents: 213,
+        lineTotalCents: 639,
+        vatRateBps: 1000,
+      }),
+      line({
+        quantity: 3,
+        unitPriceCents: 117,
+        lineTotalCents: 351,
+        vatRateBps: 400,
+      }),
+      line({
+        quantity: 1.5,
+        unitPriceCents: 1002,
+        lineTotalCents: 1503,
+        vatRateBps: 1000,
+      }),
+      line({
+        quantity: 13.2,
+        unitPriceCents: 233,
+        lineTotalCents: 3076,
+        vatRateBps: 400,
+      }),
+      line({
+        quantity: 13.5,
+        unitPriceCents: 207,
+        lineTotalCents: 2795,
+        vatRateBps: 400,
+      }),
+    ];
+    const inv = {
+      ...valid,
+      lines,
+      taxBaseCents: 8783,
+      vatAmountCents: 480,
+      totalCents: 9263,
+    };
+    expect(ruleIds(inv)).toEqual([]);
+  });
+
+  it("still flags a gap larger than the rounding of its lines", () => {
+    const inv = {
+      ...valid,
+      taxBaseCents: 6302,
+      vatAmountCents: 612,
+      totalCents: 6914,
+    };
+    expect(ruleIds(inv)).toContain("lines-sum");
+  });
+
   it("flags lines that do not add up to the tax base", () => {
     expect(
       ruleIds({ ...valid, taxBaseCents: 6400, totalCents: 7012 }),
