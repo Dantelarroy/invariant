@@ -90,3 +90,4 @@ export const invoiceLines = pgTable("invoice_lines", {
   lineTotalCents: bigint("line_total_cents", { mode: "number" }).notNull(),
   vatRateBps: integer("vat_rate_bps").notNull(),
 });
+export type StoredInvoice = typeof invoices.$inferSelect;

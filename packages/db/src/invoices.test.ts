@@ -3,7 +3,7 @@ import type { Invoice } from "@invariant/schema";
 import { asc, eq } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { createDb } from "./client.js";
-import { saveInvoice } from "./invoices.js";
+import { findInvoiceByDocumentId, saveInvoice } from "./invoices.js";
 import { documents, invoiceLines, invoices } from "./schema.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -72,5 +72,7 @@ describe.skipIf(!databaseUrl)("saveInvoice (integration)", () => {
       "Harina 1,5 kg",
     ]);
     expect(lines[1]?.quantity).toBe(1.5);
+
+    expect((await findInvoiceByDocumentId(db, doc.id))?.id).toBe(invoiceId);
   });
 });
