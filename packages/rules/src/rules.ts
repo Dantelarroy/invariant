@@ -1,5 +1,6 @@
 import { formatMoney, type Invoice } from "@invariant/schema";
 import { applyRate } from "./rounding.js";
+import { validateSpanishTaxId } from "./tax-id.js";
 
 export type Severity = "error" | "warning";
 
@@ -11,11 +12,20 @@ export type Violation = {
   path?: string;
 };
 
+/** Facts a rule may need besides the invoice, passed in so rules stay pure. */
+export type RuleContext = {
+  /** ISO date (YYYY-MM-DD) to compare invoice dates with. */
+  today: string;
+};
+
 export type Rule = {
   id: string;
   severity: Severity;
   /** Returns one entry per problem found; an empty array means the rule holds. */
-  check: (invoice: Invoice) => { message: string; path?: string }[];
+  check: (
+    invoice: Invoice,
+    context: RuleContext,
+  ) => { message: string; path?: string }[];
 };
 
 /** Rounding differences smaller than this are not errors. */
@@ -123,10 +133,54 @@ export const total: Rule = {
   },
 };
 
+export const taxIds: Rule = {
+  id: "tax-ids",
+  severity: "error",
+  check: (invoice) => {
+    const problems: { message: string; path: string }[] = [];
+    const supplierId = invoice.supplier.taxId;
+    // A full Spanish invoice must show the supplier's tax id (RD 1619/2012, art. 6).
+    if (supplierId === undefined) {
+      problems.push({
+        message: "The supplier's tax id is missing.",
+        path: "supplier.taxId",
+      });
+    }
+    for (const party of ["supplier", "customer"] as const) {
+      const id = invoice[party].taxId;
+      if (id === undefined) continue;
+      const result = validateSpanishTaxId(id);
+      if (!result.valid) {
+        problems.push({
+          message: `The ${party}'s tax id "${id}" is not valid: ${result.reason}.`,
+          path: `${party}.taxId`,
+        });
+      }
+    }
+    return problems;
+  },
+};
+
+export const issueDate: Rule = {
+  id: "issue-date",
+  severity: "error",
+  check: (invoice, { today }) =>
+    invoice.issueDate > today
+      ? [
+          {
+            message: `The issue date ${invoice.issueDate} is in the future (today is ${today}).`,
+            path: "issueDate",
+          },
+        ]
+      : [],
+};
+
 export const RULES: readonly Rule[] = [
   lineAmount,
   linesSum,
   vatRate,
   vatAmount,
   total,
+  taxIds,
+  issueDate,
 ];

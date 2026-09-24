@@ -1,5 +1,5 @@
 import type { Invoice } from "@invariant/schema";
-import { RULES, type Rule, type Violation } from "./rules.js";
+import { RULES, type Rule, type RuleContext, type Violation } from "./rules.js";
 
 export type VerificationResult = {
   /** True when no rule with severity "error" failed. Warnings are reported but do not block. */
@@ -9,16 +9,23 @@ export type VerificationResult = {
   violations: Violation[];
 };
 
-/** Runs every business rule against an invoice. Pure: no I/O, no model calls. */
+/**
+ * Runs every business rule against an invoice. Pure: no I/O, no model calls,
+ * and no hidden clock — pass `today` for reproducible results (defaults to the current date).
+ */
 export function verifyInvoice(
   invoice: Invoice,
-  rules: readonly Rule[] = RULES,
+  options: { today?: string; rules?: readonly Rule[] } = {},
 ): VerificationResult {
+  const rules = options.rules ?? RULES;
+  const context: RuleContext = {
+    today: options.today ?? new Date().toISOString().slice(0, 10),
+  };
   const violations: Violation[] = [];
   let passed = 0;
 
   for (const rule of rules) {
-    const found = rule.check(invoice);
+    const found = rule.check(invoice, context);
     if (found.length === 0) passed += 1;
     for (const f of found) {
       violations.push({ ruleId: rule.id, severity: rule.severity, ...f });
