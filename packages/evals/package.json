@@ -7,10 +7,16 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "eval:extract": "tsx src/cli/eval-extract.ts"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.74",
+    "@invariant/extractor": "workspace:*",
     "@invariant/rules": "workspace:*",
     "@invariant/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
   }
 }
