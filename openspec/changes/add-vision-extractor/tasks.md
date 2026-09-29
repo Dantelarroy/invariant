@@ -2,9 +2,9 @@
 
 ## 1. Document extraction in `@invariant/extractor`
 
-- [ ] 1.1 RED: add `extract-from-document.test.ts` with a mock model. Cover: a PDF returns a schema-valid invoice with prompt version `extract-document-v1` and token usage; a JPEG is sent as a `file` part with media type `image/jpeg`; `text/html` and zero bytes throw `UnsupportedDocumentError` without calling the model; non-integer cents from the model fail validation; well-formed but inconsistent output is returned unchanged. Verify that the new tests fail.
-- [ ] 1.2 GREEN: add `prompts/extract-document-v1.ts`, the shared extraction core and `extractInvoiceFromDocument`, and export them with `Document` and `UnsupportedDocumentError` from the package index. Verify with `pnpm test packages/extractor`, where the text extractor tests still pass unchanged.
-- [ ] 1.3 REFACTOR: make `extractInvoiceFromText` use the shared core, with no behavior change. Verify with `pnpm lint && pnpm typecheck && pnpm test packages/extractor`.
+- [x] 1.1 RED: add `extract-from-document.test.ts` with a mock model. Cover: a PDF returns a schema-valid invoice with prompt version `extract-document-v1` and token usage; a JPEG is sent as a `file` part with media type `image/jpeg`; `text/html` and zero bytes throw `UnsupportedDocumentError` without calling the model; non-integer cents from the model fail validation; well-formed but inconsistent output is returned unchanged. Verify that the new tests fail.
+- [x] 1.2 GREEN: add `prompts/extract-document-v1.ts`, the shared extraction core and `extractInvoiceFromDocument`, and export them with `Document` and `UnsupportedDocumentError` from the package index. Verify with `pnpm test packages/extractor`, where the text extractor tests still pass unchanged.
+- [x] 1.3 REFACTOR: make `extractInvoiceFromText` use the shared core, with no behavior change. Verify with `pnpm lint && pnpm typecheck && pnpm test packages/extractor`.
 
 ## 2. Scoring in the new `@invariant/evals` package
 
