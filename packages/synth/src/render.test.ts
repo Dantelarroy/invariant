@@ -8,6 +8,9 @@ import { renderHtml } from "./templates/index.js";
 
 // Needs a browser: `pnpm exec playwright install chromium` (CI installs it).
 const hasBrowser = existsSync(chromium.executablePath());
+// Rendering six documents takes ~5 s on a modest laptop, right at Vitest's
+// default limit, so the browser tests get more room.
+const BROWSER_TIMEOUT_MS = 30_000;
 
 describe.skipIf(!hasBrowser)("renderDocument (browser)", () => {
   let browser: Browser;
@@ -18,28 +21,36 @@ describe.skipIf(!hasBrowser)("renderDocument (browser)", () => {
     await browser?.close();
   });
 
-  it("produces a PDF and a JPEG for every template", async () => {
-    for (const seed of [1, 2, 3, 4, 5, 6]) {
-      const synthetic = generateInvoice(seed);
-      const { pdf, image } = await renderDocument(
-        browser,
-        renderHtml(synthetic),
-        randomAugmentation(createRandom(seed)),
-      );
-      expect(pdf.subarray(0, 4).toString()).toBe("%PDF");
-      expect([...image.subarray(0, 2)]).toEqual([0xff, 0xd8]); // JPEG magic bytes
-    }
-  });
+  it(
+    "produces a PDF and a JPEG for every template",
+    async () => {
+      for (const seed of [1, 2, 3, 4, 5, 6]) {
+        const synthetic = generateInvoice(seed);
+        const { pdf, image } = await renderDocument(
+          browser,
+          renderHtml(synthetic),
+          randomAugmentation(createRandom(seed)),
+        );
+        expect(pdf.subarray(0, 4).toString()).toBe("%PDF");
+        expect([...image.subarray(0, 2)]).toEqual([0xff, 0xd8]); // JPEG magic bytes
+      }
+    },
+    BROWSER_TIMEOUT_MS,
+  );
 
-  it("degrades the image: a noisy render differs from a clean one", async () => {
-    const html = renderHtml(generateInvoice(1));
-    const clean = await renderDocument(browser, html, CLEAN);
-    const noisy = await renderDocument(browser, html, {
-      ...CLEAN,
-      rotationDeg: 1.2,
-      noiseOpacity: 0.2,
-      jpegQuality: 50,
-    });
-    expect(noisy.image.equals(clean.image)).toBe(false);
-  });
+  it(
+    "degrades the image: a noisy render differs from a clean one",
+    async () => {
+      const html = renderHtml(generateInvoice(1));
+      const clean = await renderDocument(browser, html, CLEAN);
+      const noisy = await renderDocument(browser, html, {
+        ...CLEAN,
+        rotationDeg: 1.2,
+        noiseOpacity: 0.2,
+        jpegQuality: 50,
+      });
+      expect(noisy.image.equals(clean.image)).toBe(false);
+    },
+    BROWSER_TIMEOUT_MS,
+  );
 });
