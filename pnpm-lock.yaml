@@ -80,6 +80,15 @@ importers:
         specifier: ^0.31.11
         version: 0.31.11
 
+  packages/evals:
+    dependencies:
+      '@invariant/rules':
+        specifier: workspace:*
+        version: link:../rules
+      '@invariant/schema':
+        specifier: workspace:*
+        version: link:../schema
+
   packages/extractor:
     dependencies:
       '@invariant/schema':
