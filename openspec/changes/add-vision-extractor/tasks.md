@@ -8,8 +8,8 @@
 
 ## 2. Scoring in the new `@invariant/evals` package
 
-- [ ] 2.1 Scaffold `packages/evals` (package.json, tsconfig, index) following `packages/rules`, and add it to the workspace. Verify with `pnpm install` and `pnpm typecheck`.
-- [ ] 2.2 RED: add `score.test.ts` for every scenario in `specs/extraction-evals` "Field-level scoring" and "Rule verdict":
+- [x] 2.1 Scaffold `packages/evals` (package.json, tsconfig, index) following `packages/rules`, and add it to the workspace. Verify with `pnpm install` and `pnpm typecheck`.
+- [x] 2.2 RED: add `score.test.ts` for every scenario in `specs/extraction-evals` "Field-level scoring" and "Rule verdict":
   - perfect match;
   - 1-cent total miss;
   - tax id `b-12345674` against `B12345674`;
@@ -18,8 +18,8 @@
   - wrong but consistent extraction with rules passing.
 
   Verify that the tests fail.
-- [ ] 2.3 GREEN: implement `scoreExtraction` and `summarize`, which covers per-field accuracy, exact-match rate, rule pass rate, failures, tokens and median latency, and add `summarize` tests. Verify with `pnpm test packages/evals`.
-- [ ] 2.4 Write `docs/adr/0008-scoring-extractions.md`, covering exact cents, identifier normalization, lines scored by count for now, "absent in both" as a match, and why rule pass rate is reported next to accuracy. Verify that the ADR is linked from `docs/architecture.md`.
+- [x] 2.3 GREEN: implement `scoreExtraction` and `summarize`, which covers per-field accuracy, exact-match rate, rule pass rate, failures, tokens and median latency, and add `summarize` tests. Verify with `pnpm test packages/evals`.
+- [x] 2.4 Write `docs/adr/0008-scoring-extractions.md`, covering exact cents, identifier normalization, lines scored by count for now, "absent in both" as a match, and why rule pass rate is reported next to accuracy. Verify that the ADR is linked from `docs/architecture.md`.
 
 ## 3. Dataset loader and eval runner
 
