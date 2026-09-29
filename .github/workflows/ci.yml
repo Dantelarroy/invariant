@@ -30,8 +30,18 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
+      validator:
+        image: easybill/en16931-validator:0.7.0
+        ports:
+          - 8082:8080
+        options: >-
+          --health-cmd "wget -q -O /dev/null http://127.0.0.1:8080/health"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
     env:
       DATABASE_URL: postgres://invariant:invariant_ci_only@localhost:5433/invariant
+      EN16931_VALIDATOR_URL: http://localhost:8082
     steps:
       - uses: actions/checkout@v4
         with:
