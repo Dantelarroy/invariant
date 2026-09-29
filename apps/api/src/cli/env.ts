@@ -1,10 +1,11 @@
 import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { openai } from "@ai-sdk/openai";
 import { createDb } from "@invariant/db";
 import { formatMoney } from "@invariant/schema";
 import { createInvariantMastra, type RunResult } from "../mastra.js";
 
-const envPath = new URL("../../../../.env", import.meta.url).pathname;
+const envPath = fileURLToPath(new URL("../../../../.env", import.meta.url));
 if (existsSync(envPath)) process.loadEnvFile(envPath);
 
 /** Wires the real dependencies (Postgres + OpenAI) for command-line use. */
