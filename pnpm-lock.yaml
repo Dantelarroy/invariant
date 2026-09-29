@@ -141,6 +141,9 @@ importers:
 
   packages/ubl:
     dependencies:
+      '@invariant/evals':
+        specifier: workspace:*
+        version: link:../evals
       '@invariant/rules':
         specifier: workspace:*
         version: link:../rules
@@ -150,6 +153,10 @@ importers:
       xmlbuilder2:
         specifier: ^4.0.3
         version: 4.0.3
+    devDependencies:
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
 
 packages:
 

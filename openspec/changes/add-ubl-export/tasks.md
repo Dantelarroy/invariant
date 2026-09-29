@@ -31,12 +31,12 @@
 
 ## 3. Dataset check
 
-- [ ] 3.1 Add `src/cli/check-dataset.ts` and the root script `ubl:check` (`--dataset`, `--limit`). Verify with `pnpm ubl:check --dataset data/synth --limit 30`. It must:
+- [x] 3.1 Add `src/cli/check-dataset.ts` and the root script `ubl:check` (`--dataset`, `--limit`). Verify with `pnpm ubl:check --dataset data/synth --limit 30`. It must:
   - print the valid, refused (with reasons) and invalid counts;
   - print warnings apart and the failures per rule id;
   - exit non-zero on any invalid document.
-- [ ] 3.2 Run it on all 300 invoices of `data/synth-erp` and record in `docs/ubl.md` the counts, which rules fail and why (for example rounding in BR-CO-10/13), and what that means for the next decision. Verify that the numbers match the command output.
-- [ ] 3.3 Document `ubl:check` and the validator service in `README.md`. Verify that the commands run as written.
+- [x] 3.2 Run it on all 300 invoices of `data/synth-erp` and record in `docs/ubl.md` the counts, which rules fail and why (for example rounding in BR-CO-10/13), and what that means for the next decision. Verify that the numbers match the command output.
+- [x] 3.3 Document `ubl:check` and the validator service in `README.md`. Verify that the commands run as written.
 
 ## 4. Integration
 
