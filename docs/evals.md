@@ -42,3 +42,28 @@ Reports: `synth-erp-gpt-5-mini-20260929T185510.json`, `synth-erp-gpt-5-20260929T
 - On clean ERP PDFs, gpt-5 is no more accurate than gpt-5-mini once the withholding sign is set aside (gpt-5-mini adds one tax id miss). It is slower (median 20.5 s against 14.7 s, with one 322 s outlier on `erp-fs-000148`) and uses more output tokens.
 - Totals, tax base, VAT, dates and line counts were read exactly in all 60 documents, photos included.
 - Rule pass rate tracks exact match closely, except for the wrong-but-consistent case above. That supports using the rules as the cascade trigger, with the known blind spot of identifiers and invoice numbers.
+
+## Prompt v2 (2026-09-29)
+
+`extract-document-v2` adds two instructions, one per v1 failure pattern: withholding (IRPF) is reported as a positive amount even when printed with a minus sign, and tax ids contain only the identifier, without labels or neighbouring text. Same datasets, same first 20 labels, gpt-5-mini only.
+
+| Metric | v1 · ERP PDF | **v2 · ERP PDF** | v1 · synth JPEG | **v2 · synth JPEG** |
+|---|---:|---:|---:|---:|
+| Supplier tax id | 95.0 % | **100.0 %** | 75.0 % | 75.0 % |
+| Customer tax id | 100.0 % | 95.0 % | 90.0 % | 90.0 % |
+| Withholding | 60.0 % | **100.0 %** | 70.0 % | **100.0 %** |
+| **Exact match** | 60.0 % | **95.0 %** | 60.0 % | **70.0 %** |
+| **Rule pass** | 60.0 % | **100.0 %** | 65.0 % | **75.0 %** |
+| Tokens in / out | 28,959 / 29,375 | 31,179 / 28,207 | 29,483 / 29,816 | 31,703 / 28,148 |
+| Median latency | 14,735 ms | 11,919 ms | 15,059 ms | 13,085 ms |
+
+Every other field stays at 100 %, except the JPEG invoice number at 90 %. Reports: `synth-erp-gpt-5-mini-20260929T193841.json`, `synth-gpt-5-mini-20260929T194317.json`.
+
+- **Withholding is solved:** 100 % on both datasets.
+- **The only ERP miss left** is `erp-fs-000170`, where the customer tax id was omitted. The rules cannot flag a missing optional field.
+- **What remains on photos is reading, not instructions:**
+  - character confusions in tax ids: `synth-000004` Q → 0, `synth-000015` B → 8, `synth-000020` a dropped digit;
+  - `synth-000005`, with three misreads.
+
+  The `tax-ids` rule catches all of them except the wrong-but-consistent invoice number in `synth-000018`, which is still silent.
+- **Next levers for photos:** a frontier fallback triggered by rule failures (the cascade), or a higher-resolution image. Prompt wording has done its part.

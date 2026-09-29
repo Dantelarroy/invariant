@@ -1,5 +1,6 @@
 /**
  * Prompt v1 for extracting an invoice from a document (PDF, scan or photo).
+ * Superseded by extract-document-v2; kept so v1 eval reports stay reproducible.
  * Versioned separately from the text prompt, because reading a document has
  * its own failure modes and evals must tell the two apart.
  */
