@@ -6,7 +6,7 @@ import {
 import {
   EXTRACT_DOCUMENT_INSTRUCTIONS,
   EXTRACT_DOCUMENT_PROMPT_VERSION,
-} from "./prompts/extract-document-v1.js";
+} from "./prompts/extract-document-v2.js";
 
 /** Media types a vision-capable model can read as an invoice document. */
 export const SUPPORTED_MEDIA_TYPES = [

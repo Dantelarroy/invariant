@@ -78,7 +78,7 @@ describe("extractInvoiceFromDocument", () => {
     const result = await extractInvoiceFromDocument(pdf, model);
 
     expect(result.invoice).toEqual(invoice);
-    expect(result.promptVersion).toBe("extract-document-v1");
+    expect(result.promptVersion).toBe("extract-document-v2");
     expect(result.usage).toEqual({ inputTokens: 1500, outputTokens: 90 });
   });
 
@@ -95,6 +95,18 @@ describe("extractInvoiceFromDocument", () => {
       "Money is integer cents",
     );
     expect(result.invoice).toEqual(invoice);
+  });
+
+  it("tells the model that withholding is a positive amount and tax ids are bare", async () => {
+    const model = mockModelAnswering(modelOutput);
+
+    await extractInvoiceFromDocument(pdf, model);
+
+    // Baseline v1 (docs/evals.md): IRPF came back negative on every invoice
+    // with withholding, and tax ids kept prefixes such as "NIF".
+    const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt);
+    expect(prompt).toContain("Withholding (IRPF) is a positive amount");
+    expect(prompt).toContain("Tax IDs contain only the identifier");
   });
 
   it("rejects an unsupported media type before calling the model, naming the supported ones", async () => {
