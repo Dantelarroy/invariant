@@ -1,0 +1,26 @@
+schema: spec-driven
+
+context: |
+  Language: English
+  All artifacts must be written in English.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+
+  Project: Invariant turns messy Spanish invoices (PDFs, scans, photos) into
+  verifiable accounting data and EN16931 UBL e-invoices. Business rules
+  (sums, Spanish VAT 21/10/4 %, tax id check characters, EN16931 schematron)
+  act as an oracle: to accept, repair or ask a human; as label-free evals; and
+  as the reward for training a small vision-language model.
+  Stack: pnpm monorepo, Node 24, strict TypeScript, Zod, mastra, AI SDK,
+  Drizzle + Postgres (pgvector), Vitest, Biome; Python 3.12 with uv for data.
+  Architecture: docs/architecture.md. Decisions: docs/adr/. Conventions: AGENTS.md.
+
+rules:
+  proposal:
+    - Include a Non-goals section.
+    - Name the ADRs the change relies on or supersedes.
+  design:
+    - Record every non-trivial decision as a new ADR in docs/adr/ and link it.
+  tasks:
+    - Order tasks test-first (RED, GREEN, REFACTOR); each task names its test.
+    - Money is always integer cents; never floats.
+    - Real invoice data stays in data/ (git-ignored), never in the repo.
