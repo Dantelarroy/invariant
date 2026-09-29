@@ -7,11 +7,16 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "ubl:check": "tsx src/cli/check-dataset.ts"
   },
   "dependencies": {
+    "@invariant/evals": "workspace:*",
     "@invariant/rules": "workspace:*",
     "@invariant/schema": "workspace:*",
     "xmlbuilder2": "^4.0.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
   }
 }
