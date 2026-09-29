@@ -26,7 +26,7 @@ Cross-cutting: Langfuse traces every step (cost, latency, rule scores), human co
 | Ledger | `@invariant/db` | Postgres system of record (Drizzle). Idempotent by file SHA-256. |
 | Rule verifier | `@invariant/rules` | Business invariants; also served over HTTP as the RL reward. |
 | Extractor | `@invariant/extractor` | VLM extraction and the small → frontier cascade. |
-| E-invoice | `@invariant/ubl` | UBL generation and EN16931 validation. |
+| E-invoice | `@invariant/ubl` | UBL generation ([ADR-0009](adr/0009-ubl-mapping.md)) and EN16931 validation. |
 | Orchestration | `apps/api`, `apps/worker` | mastra workflows (suspend/resume for human review), queue consumer. |
 | Observability & evals | `@invariant/observability`, `@invariant/evals` | Langfuse tracing, annotation queue, field-level accuracy ([ADR-0008](adr/0008-scoring-extractions.md)), CI gate. |
 | Agent | `@invariant/agent`, `@invariant/mcp-server` | Tools over the ledger, exposed via MCP. |

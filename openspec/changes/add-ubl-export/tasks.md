@@ -2,8 +2,8 @@
 
 ## 1. Package and mapper
 
-- [ ] 1.1 Scaffold `packages/ubl` (`@invariant/ubl`, following `packages/evals`) with `xmlbuilder2`, `@invariant/schema` and `@invariant/rules`. Verify with `pnpm install && pnpm typecheck`.
-- [ ] 1.2 RED: add `to-ubl.test.ts` covering:
+- [x] 1.1 Scaffold `packages/ubl` (`@invariant/ubl`, following `packages/evals`) with `xmlbuilder2`, `@invariant/schema` and `@invariant/rules`. Verify with `pnpm install && pnpm typecheck`.
+- [x] 1.2 RED: add `to-ubl.test.ts` covering:
   - two VAT rates (lines, breakdowns and totals);
   - `123456` → `1234.56`;
   - ES country and `ES` + NIF for valid tax ids;
@@ -14,8 +14,8 @@
   - a snapshot of the element order for a full invoice.
 
   Verify that the tests fail.
-- [ ] 1.3 GREEN: implement `toUbl` and cents formatting with integer arithmetic only. Verify with `pnpm test packages/ubl`.
-- [ ] 1.4 Write `docs/adr/0009-ubl-mapping.md` (derived fields, refusal, VAT breakdown adjustment, printed totals and rounding, IRPF) and link it from `docs/architecture.md`. Verify that the link resolves.
+- [x] 1.3 GREEN: implement `toUbl` and cents formatting with integer arithmetic only. Verify with `pnpm test packages/ubl`.
+- [x] 1.4 Write `docs/adr/0009-ubl-mapping.md` (derived fields, refusal, VAT breakdown adjustment, printed totals and rounding, IRPF) and link it from `docs/architecture.md`. Verify that the link resolves.
 
 ## 2. Validator service and client
 
