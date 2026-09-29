@@ -23,9 +23,9 @@
 
 ## 3. Dataset loader and eval runner
 
-- [ ] 3.1 RED/GREEN: add `loadDataset(dir, { format, limit })` with tests on a temporary directory. It keeps the file order stable, applies the limit, and when a label names a missing file it throws before anything runs, naming that file. Verify with `pnpm test packages/evals`.
-- [ ] 3.2 Add the CLI `src/cli/eval-extract.ts` and the root script `eval:extract` (options `--dataset`, `--model`, `--limit` default 20, `--format` default pdf). It loads `.env` via `fileURLToPath`, extracts one document at a time, keeps going after a failure, prints the summary table and writes the report to `data/evals/`. Verify with `pnpm eval:extract --dataset data/synth-erp --model gpt-5-mini --limit 2`, which prints a summary and writes a report whose `meta` has dataset, model, prompt version, limit, format and start time.
-- [ ] 3.3 Document the command in `README.md` (Commands) and state that reports stay in the git-ignored `data/`. Verify that the documented command runs as written.
+- [x] 3.1 RED/GREEN: add `loadDataset(dir, { format, limit })` with tests on a temporary directory. It keeps the file order stable, applies the limit, and when a label names a missing file it throws before anything runs, naming that file. Verify with `pnpm test packages/evals`.
+- [x] 3.2 Add the CLI `src/cli/eval-extract.ts` and the root script `eval:extract` (options `--dataset`, `--model`, `--limit` default 20, `--format` default pdf). It loads `.env` via `fileURLToPath`, extracts one document at a time, keeps going after a failure, prints the summary table and writes the report to `data/evals/`. Verify with `pnpm eval:extract --dataset data/synth-erp --model gpt-5-mini --limit 2`, which prints a summary and writes a report whose `meta` has dataset, model, prompt version, limit, format and start time.
+- [x] 3.3 Document the command in `README.md` (Commands) and state that reports stay in the git-ignored `data/`. Verify that the documented command runs as written.
 
 ## 4. Day 9 baseline
 

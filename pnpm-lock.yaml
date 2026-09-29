@@ -82,12 +82,22 @@ importers:
 
   packages/evals:
     dependencies:
+      '@ai-sdk/openai':
+        specifier: ^4.0.74
+        version: 4.0.74(zod@4.6.5)
+      '@invariant/extractor':
+        specifier: workspace:*
+        version: link:../extractor
       '@invariant/rules':
         specifier: workspace:*
         version: link:../rules
       '@invariant/schema':
         specifier: workspace:*
         version: link:../schema
+    devDependencies:
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
 
   packages/extractor:
     dependencies:

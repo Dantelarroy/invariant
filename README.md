@@ -27,6 +27,10 @@ pnpm review <run-id> approve|reject        # answer a paused run
 pnpm synth --count 50                      # synthetic Spanish invoices in data/synth
 pnpm erp:up && pnpm erp:setup              # local FacturaScripts (real invoicing software)
 pnpm synth:erp --count 50                  # invoices printed by FacturaScripts in data/synth-erp
+pnpm eval:extract --dataset data/synth-erp --model gpt-5-mini --limit 20   # score extraction against labels
+pnpm eval:extract --dataset data/synth --model gpt-5-mini --format jpg     # same, on degraded photos
 ```
+
+`eval:extract` reads `labels.jsonl` plus one `<id>.<format>` file per label (`--format pdf|jpg|png|webp`, default `pdf`; `--limit` defaults to 20). It prints a summary table and writes a JSON report to `data/evals/`, which is git-ignored like the rest of `data/`: reports never get committed. Scoring rules are in [ADR-0008](docs/adr/0008-scoring-extractions.md).
 
 Conventions live in [`AGENTS.md`](./AGENTS.md).
