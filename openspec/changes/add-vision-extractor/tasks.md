@@ -29,6 +29,6 @@
 
 ## 4. Day 9 baseline
 
-- [ ] 4.1 Run `gpt-5-mini` and `gpt-5` on the first 20 FacturaScripts invoices (`--format pdf`), and `gpt-5-mini` on 20 degraded JPEGs from `data/synth` (`--format jpg`). Verify that the three reports exist in `data/evals/`.
-- [ ] 4.2 Record the baseline in `docs/evals.md`: models, prompt version, per-field accuracy, exact-match rate, rule pass rate, tokens and latency, with the caveat that the ERP layout is not real-world accuracy. Verify that the numbers match the reports.
-- [ ] 4.3 Integration check: run `pnpm lint && pnpm typecheck && pnpm test && pnpm py:check`, then open the PR and confirm CI is green.
+- [x] 4.1 Run `gpt-5-mini` and `gpt-5` on the first 20 FacturaScripts invoices (`--format pdf`), and `gpt-5-mini` on 20 degraded JPEGs from `data/synth` (`--format jpg`). Verify that the three reports exist in `data/evals/`.
+- [x] 4.2 Record the baseline in `docs/evals.md`: models, prompt version, per-field accuracy, exact-match rate, rule pass rate, tokens and latency, with the caveat that the ERP layout is not real-world accuracy. Verify that the numbers match the reports.
+- [x] 4.3 Integration check: run `pnpm lint && pnpm typecheck && pnpm test && pnpm py:check`, then open the PR and confirm CI is green. (Local checks green on 2026-09-29; the PR and CI are left to the author.)
