@@ -6,7 +6,7 @@
 
 ## 2. Resume with a corrected invoice
 
-- [ ] 2.1 RED/GREEN: `ReviewDecisionSchema` gains an optional `invoice`. Approving with it persists the corrected invoice and the reviewer; approving without it behaves as before; rejecting ignores it. Verify with `pnpm test apps/api` (Postgres integration).
+- [x] 2.1 RED/GREEN: `ReviewDecisionSchema` gains an optional `invoice`. Approving with it persists the corrected invoice and the reviewer; approving without it behaves as before; rejecting ignores it. Verify with `pnpm test apps/api` (Postgres integration).
 
 ## 3. Queue, sync and export
 

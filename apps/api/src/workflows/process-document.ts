@@ -59,6 +59,8 @@ export const OutcomeSchema = z.discriminatedUnion("kind", [
     reviewedBy: z.string(),
     /** True when the stored invoice came from the rule-guided repair (ADR-0010). */
     repaired: z.boolean(),
+    /** Present (true) when the reviewer's corrected invoice was stored (ADR-0013). */
+    corrected: z.literal(true).optional(),
   }),
   z.object({
     kind: z.literal("rejected"),
@@ -75,10 +77,16 @@ export const ReviewRequestSchema = z.object({
   question: z.string(),
 });
 
-/** What the reviewer answers to resume the run. */
+/**
+ * What the reviewer answers to resume the run. `invoice` is the reviewer's
+ * corrected invoice (ADR-0013): on approval it is stored instead of the
+ * extraction; on rejection it is ignored. Optional, so terminal reviews and
+ * runs paused before it existed resume as before.
+ */
 export const ReviewDecisionSchema = z.object({
   approved: z.boolean(),
   reviewer: z.string().min(1),
+  invoice: InvoiceSchema.optional(),
 });
 export type ReviewDecision = z.infer<typeof ReviewDecisionSchema>;
 
@@ -108,6 +116,8 @@ const ReviewedSchema = ExtractedSchema.extend({
   approved: z.boolean(),
   reviewedBy: z.string(),
   repaired: z.boolean(),
+  /** True when `invoice` is the reviewer's correction, not the extraction. */
+  corrected: z.boolean().default(false),
 });
 
 const errorCount = (issues: readonly { severity: string }[]) =>
@@ -301,7 +311,12 @@ export function createProcessDocumentWorkflow(deps: {
       const { issues, ...extracted } = inputData;
       // Warnings are kept in the run but only errors need a person.
       if (!issues.some((issue) => issue.severity === "error")) {
-        return { ...extracted, approved: true, reviewedBy: "rules" };
+        return {
+          ...extracted,
+          approved: true,
+          reviewedBy: "rules",
+          corrected: false,
+        };
       }
       if (!resumeData) {
         await setDocumentStatus(db, extracted.documentId, "needs_review");
@@ -315,10 +330,14 @@ export function createProcessDocumentWorkflow(deps: {
         setBranch(tracingContext, "needs_review");
         return await suspend(request);
       }
+      // A correction only counts when the reviewer approves (ADR-0013).
+      const correction = resumeData.approved ? resumeData.invoice : undefined;
       return {
         ...extracted,
+        ...(correction ? { invoice: correction } : {}),
         approved: resumeData.approved,
         reviewedBy: resumeData.reviewer,
+        corrected: correction !== undefined,
       };
     },
   });
@@ -335,6 +354,7 @@ export function createProcessDocumentWorkflow(deps: {
         approved,
         reviewedBy,
         repaired,
+        corrected,
       } = inputData;
       // A resumed run starts its own trace at human-review, after ingest.
       setTraceMetadata(tracingContext, { documentId, promptVersion });
@@ -342,6 +362,23 @@ export function createProcessDocumentWorkflow(deps: {
         await setDocumentStatus(db, documentId, "rejected");
         setBranch(tracingContext, "rejected");
         return { kind: "rejected" as const, documentId, reviewedBy };
+      }
+      if (corrected) {
+        // The golden invoice is "as printed" (ADR-0013): a correction that still
+        // breaks a rule is stored, and the rule result is only recorded.
+        const { valid, violations } = verifyInvoice(invoice);
+        setTraceMetadata(tracingContext, {
+          corrected: true,
+          correctedRulesValid: valid,
+        });
+        if (!valid) {
+          console.warn(
+            `[review] corrected invoice of ${documentId} still breaks: ${violations
+              .filter((v) => v.severity === "error")
+              .map((v) => v.ruleId)
+              .join(", ")}`,
+          );
+        }
       }
       const invoiceId = await saveInvoice(
         db,
@@ -358,6 +395,7 @@ export function createProcessDocumentWorkflow(deps: {
         totalCents: invoice.totalCents,
         reviewedBy,
         repaired,
+        ...(corrected ? { corrected: true as const } : {}),
       };
     },
   });
