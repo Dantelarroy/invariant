@@ -8,9 +8,12 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "obs:report": "tsx src/cli/report.ts"
+    "obs:report": "tsx src/cli/report.ts",
+    "prompts:seed": "tsx src/cli/prompts-seed.ts"
   },
   "dependencies": {
+    "@invariant/extractor": "workspace:*",
+    "@langfuse/client": "5.11.1",
     "@langfuse/otel": "5.11.1",
     "@langfuse/tracing": "5.11.1",
     "@mastra/core": "1.69.0",
