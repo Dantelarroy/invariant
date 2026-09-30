@@ -64,6 +64,35 @@ describe("extractInvoiceFromText", () => {
     expect(result.usage).toEqual({ inputTokens: 120, outputTokens: 80 });
   });
 
+  it("returns the model id the provider answered with and the call latency", async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return {
+          content: [{ type: "text", text: JSON.stringify(modelOutput) }],
+          finishReason: { unified: "stop", raw: "stop" },
+          usage: {
+            inputTokens: {
+              total: 120,
+              noCache: 120,
+              cacheRead: undefined,
+              cacheWrite: undefined,
+            },
+            outputTokens: { total: 80, text: 80, reasoning: undefined },
+          },
+          response: { modelId: "gpt-5-mini-2025-08-07" },
+          warnings: [],
+        };
+      },
+    });
+
+    const result = await extractInvoiceFromText("FACTURA ...", model);
+
+    expect(result.modelId).toBe("gpt-5-mini-2025-08-07");
+    expect(result.latencyMs).toBeGreaterThanOrEqual(15);
+    expect(Number.isSafeInteger(result.latencyMs)).toBe(true);
+  });
+
   it("sends the instructions as system prompt and the document as user prompt", async () => {
     const model = mockModelAnswering(modelOutput);
 
