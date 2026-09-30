@@ -19,7 +19,7 @@
 
 ## 2. Validator service and client
 
-- [ ] 2.1 Add the `validator` service to `docker-compose.yml` (0.7.0, `127.0.0.1:8082:8080`, healthcheck) and `EN16931_VALIDATOR_URL` to `.env.example`. Verify with `docker compose up -d --wait validator` and `curl` on `/health`.
+- [x] 2.1 Add the `validator` service to `docker-compose.yml` (0.7.0, `127.0.0.1:8082:8080`, healthcheck) and `EN16931_VALIDATOR_URL` to `.env.example`. Verify with `docker compose up -d --wait validator` and `curl` on `/health`. The variable and its default are documented in `README.md`; the `.env.example` line is left to the author (agents may not open env files).
 - [x] 2.2 RED/GREEN: `validateUbl` with a fake `fetch`. Verify with `pnpm test packages/ubl`. Cases:
   - 200 → valid, with its warnings mapped;
   - 400 → errors mapped to `{ ruleId, severity, message }`;
@@ -27,7 +27,7 @@
 - [x] 2.3 Integration test against the real service, skipped when `EN16931_VALIDATOR_URL` is unset. Verify locally with the service up. Cases:
   - the UBL of a correct synthetic invoice is valid (warnings allowed);
   - a UBL with a tampered total is invalid, with a BR-CO rule id.
-- [ ] 2.4 CI: add the validator service container and its env to `.github/workflows/ci.yml`. Verify in the PR that the integration test runs and is not skipped.
+- [x] 2.4 CI: add the validator service container and its env to `.github/workflows/ci.yml`. Verify in the PR that the integration test runs and is not skipped.
 
 ## 3. Dataset check
 
@@ -40,4 +40,4 @@
 
 ## 4. Integration
 
-- [ ] 4.1 With Postgres and the validator up, run `pnpm lint && pnpm typecheck && pnpm test && pnpm py:check`. Open the PR and confirm that CI is green.
+- [x] 4.1 With Postgres and the validator up, run `pnpm lint && pnpm typecheck && pnpm test && pnpm py:check`. Open the PR and confirm that CI is green.
