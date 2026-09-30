@@ -6,6 +6,16 @@ export {
   randomAugmentation,
   renderDocument,
 } from "./render.js";
+export {
+  ERROR_KINDS,
+  type ErrorKind,
+  generateReviewFixtures,
+  type InjectedError,
+  injectError,
+  type ReviewFixture,
+  type ReviewFixtureManifest,
+  renderInvoiceText,
+} from "./review-fixtures.js";
 export { renderHtml } from "./templates/index.js";
 export {
   type SyntheticInvoice,

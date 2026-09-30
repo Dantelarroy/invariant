@@ -21,6 +21,7 @@
     "erp:down": "docker compose -f infra/erp/docker-compose.yml down",
     "erp:setup": "pnpm --filter @invariant/synth erp:setup",
     "synth:erp": "pnpm --filter @invariant/synth generate:erp",
+    "synth:review": "pnpm --filter @invariant/synth generate:review",
     "langfuse:up": "docker compose -f infra/langfuse/docker-compose.yml up -d --wait",
     "langfuse:down": "docker compose -f infra/langfuse/docker-compose.yml down",
     "obs:report": "pnpm --filter @invariant/observability obs:report",
