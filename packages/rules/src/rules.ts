@@ -10,7 +10,15 @@ export type Violation = {
   message: string;
   /** Where the problem is, e.g. "lines[1].lineTotalCents". */
   path?: string;
+  /**
+   * The values the rule compared, keyed per rule (amounts in integer cents),
+   * e.g. `{ expectedCents, printedCents }`. Lets callers build questions and
+   * reports without parsing the English message.
+   */
+  details?: ViolationDetails;
 };
+
+export type ViolationDetails = Record<string, number | string>;
 
 /** Facts a rule may need besides the invoice, passed in so rules stay pure. */
 export type RuleContext = {
@@ -25,7 +33,7 @@ export type Rule = {
   check: (
     invoice: Invoice,
     context: RuleContext,
-  ) => { message: string; path?: string }[];
+  ) => { message: string; path?: string; details?: ViolationDetails }[];
 };
 
 /** Rounding differences smaller than this are not errors. */
@@ -50,6 +58,13 @@ export const lineAmount: Rule = {
         {
           message: `Line ${i + 1}: ${line.quantity} × ${formatMoney(line.unitPriceCents)} is ${formatMoney(Math.round(expected))}, but the line says ${formatMoney(line.lineTotalCents)}.`,
           path: `lines[${i}].lineTotalCents`,
+          details: {
+            line: i + 1,
+            quantity: line.quantity,
+            unitPriceCents: line.unitPriceCents,
+            expectedCents: Math.round(expected),
+            lineTotalCents: line.lineTotalCents,
+          },
         },
       ];
     }),
@@ -68,6 +83,7 @@ export const linesSum: Rule = {
       {
         message: `Lines add up to ${formatMoney(sum)} but the tax base is ${formatMoney(invoice.taxBaseCents)}.`,
         path: "taxBaseCents",
+        details: { linesSumCents: sum, taxBaseCents: invoice.taxBaseCents },
       },
     ];
   },
@@ -87,6 +103,7 @@ export const vatRate: Rule = {
         {
           message: `Line ${i + 1}: ${percent(line.vatRateBps)} is not a Spanish VAT rate on ${invoice.issueDate}.`,
           path: `lines[${i}].vatRateBps`,
+          details: { line: i + 1, rateBps: line.vatRateBps },
         },
       ];
     }),
@@ -113,6 +130,10 @@ export const vatAmount: Rule = {
       {
         message: `VAT should be ${formatMoney(expected)} (base × rate, per rate) but the invoice says ${formatMoney(invoice.vatAmountCents)}.`,
         path: "vatAmountCents",
+        details: {
+          expectedCents: expected,
+          printedCents: invoice.vatAmountCents,
+        },
       },
     ];
   },
@@ -122,15 +143,21 @@ export const total: Rule = {
   id: "total",
   severity: "error",
   check: (invoice) => {
+    const withholding = invoice.withholdingCents ?? 0;
     const expected =
-      invoice.taxBaseCents +
-      invoice.vatAmountCents -
-      (invoice.withholdingCents ?? 0);
+      invoice.taxBaseCents + invoice.vatAmountCents - withholding;
     if (expected === invoice.totalCents) return [];
     return [
       {
         message: `Total is ${formatMoney(invoice.totalCents)} but base + VAT − withholding is ${formatMoney(expected)}.`,
         path: "totalCents",
+        details: {
+          taxBaseCents: invoice.taxBaseCents,
+          vatAmountCents: invoice.vatAmountCents,
+          withholdingCents: withholding,
+          expectedCents: expected,
+          printedCents: invoice.totalCents,
+        },
       },
     ];
   },
@@ -140,13 +167,18 @@ export const taxIds: Rule = {
   id: "tax-ids",
   severity: "error",
   check: (invoice) => {
-    const problems: { message: string; path: string }[] = [];
+    const problems: {
+      message: string;
+      path: string;
+      details: ViolationDetails;
+    }[] = [];
     const supplierId = invoice.supplier.taxId;
     // A full Spanish invoice must show the supplier's tax id (RD 1619/2012, art. 6).
     if (supplierId === undefined) {
       problems.push({
         message: "The supplier's tax id is missing.",
         path: "supplier.taxId",
+        details: { party: "supplier", reason: "missing" },
       });
     }
     for (const party of ["supplier", "customer"] as const) {
@@ -157,6 +189,7 @@ export const taxIds: Rule = {
         problems.push({
           message: `The ${party}'s tax id "${id}" is not valid: ${result.reason}.`,
           path: `${party}.taxId`,
+          details: { party, value: id, reason: result.reason },
         });
       }
     }
@@ -173,6 +206,7 @@ export const issueDate: Rule = {
           {
             message: `The issue date ${invoice.issueDate} is in the future (today is ${today}).`,
             path: "issueDate",
+            details: { issueDate: invoice.issueDate, today },
           },
         ]
       : [],

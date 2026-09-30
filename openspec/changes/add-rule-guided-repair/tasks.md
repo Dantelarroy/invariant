@@ -2,8 +2,8 @@
 
 ## 1. Structured rule details
 
-- [ ] 1.1 RED: add tests in `packages/rules` asserting `details` for each error rule (`lines-sum`, `vat-amount`, `total` with the 90.00 / 18.90 / 6.05 / 112.85 example, `vat-rate`, `tax-ids`, `issue-date`), and that existing messages, severities and paths are unchanged. Verify that the new tests fail.
-- [ ] 1.2 GREEN: add the optional `details` to `Violation` and fill it in each error rule. Carry `details` through `IssueSchema` in the workflow. Verify with `pnpm test packages/rules apps/api`.
+- [x] 1.1 RED: add tests in `packages/rules` asserting `details` for each error rule (`lines-sum`, `vat-amount`, `total` with the 90.00 / 18.90 / 6.05 / 112.85 example, `vat-rate`, `tax-ids`, `issue-date`), and that existing messages, severities and paths are unchanged. Verify that the new tests fail.
+- [x] 1.2 GREEN: add the optional `details` to `Violation` and fill it in each error rule. Carry `details` through `IssueSchema` in the workflow. Verify with `pnpm test packages/rules apps/api`.
 
 ## 2. Repair in `@invariant/extractor`
 

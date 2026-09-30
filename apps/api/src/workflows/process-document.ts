@@ -20,6 +20,8 @@ const IssueSchema = z.object({
   severity: z.enum(["error", "warning"]),
   message: z.string(),
   path: z.string().optional(),
+  /** The values the rule compared (amounts in integer cents), see @invariant/rules. */
+  details: z.record(z.string(), z.union([z.number(), z.string()])).optional(),
 });
 
 /** Final result of a run. Every run ends in exactly one of these. */

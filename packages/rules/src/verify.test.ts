@@ -303,4 +303,214 @@ describe("verifyInvoice", () => {
       expect(ruleIds({ ...valid, issueDate: TODAY })).toEqual([]);
     });
   });
+
+  describe("details", () => {
+    const violationsOf = (inv: Invoice) =>
+      verifyInvoice(inv, { today: TODAY }).violations;
+
+    it("keeps existing messages, severities and paths byte-identical", () => {
+      const inv: Invoice = {
+        ...valid,
+        issueDate: "2026-09-25",
+        supplier: { name: "X", taxId: "B12345678" },
+        customer: { name: "C", taxId: "12345678A" },
+        lines: [
+          line({ quantity: 2, unitPriceCents: 3000, lineTotalCents: 5400 }),
+          line({ vatRateBps: 1600 }),
+        ],
+        taxBaseCents: 7000,
+        vatAmountCents: 999,
+        totalCents: 1,
+      };
+      expect(
+        violationsOf(inv).map(({ ruleId, severity, message, path }) => ({
+          ruleId,
+          severity,
+          message,
+          path,
+        })),
+      ).toEqual([
+        {
+          ruleId: "line-amount",
+          severity: "warning",
+          message: "Line 1: 2 × 30,00 € is 60,00 €, but the line says 54,00 €.",
+          path: "lines[0].lineTotalCents",
+        },
+        {
+          ruleId: "lines-sum",
+          severity: "error",
+          message: "Lines add up to 64,00 € but the tax base is 70,00 €.",
+          path: "taxBaseCents",
+        },
+        {
+          ruleId: "vat-rate",
+          severity: "error",
+          message: "Line 2: 16 % is not a Spanish VAT rate on 2026-09-25.",
+          path: "lines[1].vatRateBps",
+        },
+        {
+          ruleId: "vat-amount",
+          severity: "error",
+          message:
+            "VAT should be 12,94 € (base × rate, per rate) but the invoice says 9,99 €.",
+          path: "vatAmountCents",
+        },
+        {
+          ruleId: "total",
+          severity: "error",
+          message: "Total is 0,01 € but base + VAT − withholding is 79,99 €.",
+          path: "totalCents",
+        },
+        {
+          ruleId: "tax-ids",
+          severity: "error",
+          message:
+            'The supplier\'s tax id "B12345678" is not valid: CIF control should be 4.',
+          path: "supplier.taxId",
+        },
+        {
+          ruleId: "tax-ids",
+          severity: "error",
+          message:
+            'The customer\'s tax id "12345678A" is not valid: NIF letter should be Z.',
+          path: "customer.taxId",
+        },
+        {
+          ruleId: "issue-date",
+          severity: "error",
+          message:
+            "The issue date 2026-09-25 is in the future (today is 2026-09-24).",
+          path: "issueDate",
+        },
+      ]);
+    });
+
+    it("attaches the lines sum and the tax base to lines-sum", () => {
+      const [v] = violationsOf({
+        ...valid,
+        taxBaseCents: 6400,
+        totalCents: 7012,
+      });
+      expect(v).toMatchObject({
+        ruleId: "lines-sum",
+        details: { linesSumCents: 6300, taxBaseCents: 6400 },
+      });
+    });
+
+    it("attaches the expected and printed VAT to vat-amount", () => {
+      const [v] = violationsOf({
+        ...valid,
+        vatAmountCents: 630,
+        totalCents: 6930,
+      });
+      expect(v).toMatchObject({
+        ruleId: "vat-amount",
+        details: { expectedCents: 612, printedCents: 630 },
+      });
+    });
+
+    it("attaches base, VAT, withholding, expected and printed total to total", () => {
+      const inv: Invoice = {
+        ...valid,
+        lines: [line({ unitPriceCents: 9000, lineTotalCents: 9000 })],
+        taxBaseCents: 9000,
+        vatAmountCents: 1890,
+        withholdingCents: 605,
+        totalCents: 11285,
+      };
+      expect(violationsOf(inv)).toEqual([
+        {
+          ruleId: "total",
+          severity: "error",
+          message:
+            "Total is 112,85 € but base + VAT − withholding is 102,85 €.",
+          path: "totalCents",
+          details: {
+            taxBaseCents: 9000,
+            vatAmountCents: 1890,
+            withholdingCents: 605,
+            expectedCents: 10285,
+            printedCents: 11285,
+          },
+        },
+      ]);
+    });
+
+    it("counts a missing withholding as zero in the total details", () => {
+      const [v] = violationsOf({ ...valid, totalCents: 7012 });
+      expect(v?.details).toEqual({
+        taxBaseCents: 6300,
+        vatAmountCents: 612,
+        withholdingCents: 0,
+        expectedCents: 6912,
+        printedCents: 7012,
+      });
+    });
+
+    it("attaches the line number and rate to vat-rate", () => {
+      const [v] = violationsOf({
+        ...valid,
+        lines: [line({ vatRateBps: 1600 })],
+        taxBaseCents: 1000,
+        vatAmountCents: 160,
+        totalCents: 1160,
+      });
+      expect(v).toMatchObject({
+        ruleId: "vat-rate",
+        details: { line: 1, rateBps: 1600 },
+      });
+    });
+
+    it("attaches the party, value and reason to tax-ids", () => {
+      expect(
+        violationsOf({ ...valid, customer: { name: "C", taxId: "12345678A" } }),
+      ).toEqual([
+        expect.objectContaining({
+          ruleId: "tax-ids",
+          details: {
+            party: "customer",
+            value: "12345678A",
+            reason: "NIF letter should be Z",
+          },
+        }),
+      ]);
+      expect(violationsOf({ ...valid, supplier: { name: "S" } })).toEqual([
+        expect.objectContaining({
+          ruleId: "tax-ids",
+          details: { party: "supplier", reason: "missing" },
+        }),
+      ]);
+    });
+
+    it("attaches the issue date and today to issue-date", () => {
+      const [v] = violationsOf({ ...valid, issueDate: "2026-09-25" });
+      expect(v).toMatchObject({
+        ruleId: "issue-date",
+        details: { issueDate: "2026-09-25", today: TODAY },
+      });
+    });
+
+    it("attaches the line, quantity, price, expected and printed amount to the line-amount warning", () => {
+      const [v] = violationsOf({
+        ...valid,
+        lines: [
+          line({ ...valid.lines[0], lineTotalCents: 5400 }),
+          valid.lines[1] as InvoiceLine,
+        ],
+        taxBaseCents: 5700,
+        vatAmountCents: 552,
+        totalCents: 6252,
+      });
+      expect(v).toMatchObject({
+        ruleId: "line-amount",
+        details: {
+          line: 1,
+          quantity: 2,
+          unitPriceCents: 3000,
+          expectedCents: 6000,
+          lineTotalCents: 5400,
+        },
+      });
+    });
+  });
 });
