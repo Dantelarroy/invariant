@@ -1,0 +1,35 @@
+<!--
+  Sized for a laptop (docs/observability.md), following ClickHouse's low-memory
+  advice (https://clickhouse.com/docs/operations/tips): cap the server near 1 GB,
+  shrink the mark cache and drop the system log tables, which Langfuse does not read.
+-->
+<clickhouse>
+  <max_server_memory_usage>1073741824</max_server_memory_usage>
+  <mark_cache_size>268435456</mark_cache_size>
+  <uncompressed_cache_size>0</uncompressed_cache_size>
+
+  <asynchronous_metric_log remove="1"/>
+  <asynchronous_insert_log remove="1"/>
+  <backup_log remove="1"/>
+  <background_schedule_pool_log remove="1"/>
+  <blob_storage_log remove="1"/>
+  <error_log remove="1"/>
+  <latency_log remove="1"/>
+  <metric_log remove="1"/>
+  <opentelemetry_span_log remove="1"/>
+  <part_log remove="1"/>
+  <processors_profile_log remove="1"/>
+  <query_log remove="1"/>
+  <query_metric_log remove="1"/>
+  <query_thread_log remove="1"/>
+  <query_views_log remove="1"/>
+  <session_log remove="1"/>
+  <text_log remove="1"/>
+  <trace_log remove="1"/>
+
+  <profiles>
+    <default>
+      <max_threads>2</max_threads>
+    </default>
+  </profiles>
+</clickhouse>
