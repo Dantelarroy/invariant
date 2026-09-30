@@ -1,6 +1,11 @@
+import type { VerificationResult } from "@invariant/rules";
 import { InMemorySpanExporter } from "@opentelemetry/sdk-trace-base";
 import { describe, expect, it } from "vitest";
-import { createEvalTracer } from "./index.js";
+import {
+  createEvalTracer,
+  type GenerationRef,
+  type ScoreSink,
+} from "./index.js";
 
 const env = { LANGFUSE_BASE_URL: "http://127.0.0.1:3000" };
 const meta = {
@@ -35,13 +40,37 @@ class KeepingExporter extends InMemorySpanExporter {
   }
 }
 
+/** A score sink that records what it is asked to score, and when it was flushed. */
+function recordingSink() {
+  const scored: { target: GenerationRef; verification: VerificationResult }[] =
+    [];
+  let flushed = 0;
+  const sink: ScoreSink = {
+    ruleScores: (target, verification) => {
+      scored.push({ target, verification });
+    },
+    flush: async () => {
+      flushed += 1;
+    },
+  };
+  return { sink, scored, flushes: () => flushed };
+}
+
 /** The spans the Langfuse processor would send, captured in memory. */
 function tracedWithMemory() {
   const exporter = new KeepingExporter();
-  const tracer = createEvalTracer(env, meta, { exporter });
+  const scores = recordingSink();
+  const tracer = createEvalTracer(env, meta, { exporter, scores: scores.sink });
   if (!tracer) throw new Error("tracing should be on");
-  return { tracer, exporter };
+  return { tracer, exporter, scores };
 }
+
+const failedTotal: VerificationResult = {
+  valid: false,
+  score: 6 / 7,
+  violations: [{ ruleId: "total", severity: "error", message: "Wrong total." }],
+};
+const passed: VerificationResult = { valid: true, score: 1, violations: [] };
 
 describe("createEvalTracer", () => {
   it("is off without LANGFUSE_BASE_URL", () => {
@@ -115,6 +144,34 @@ describe("createEvalTracer", () => {
     for (const span of spans) {
       expect(JSON.stringify(span.attributes)).not.toContain("JVBER"); // base64 "%PDF"
     }
+  });
+
+  it("scores each verified generation, and flushes the scores on shutdown", async () => {
+    const { tracer, exporter, scores } = tracedWithMemory();
+
+    const trace = tracer.startDocument(item);
+    await trace.generation("extract", async () => extraction);
+    trace.verified("extract", failedTotal);
+    await trace.generation("repair", async () => extraction);
+    trace.verified("repair", passed);
+    trace.end(result);
+    await tracer.shutdown();
+
+    const generations = exporter
+      .getFinishedSpans()
+      .filter(
+        (span) => span.attributes["langfuse.observation.type"] === "generation",
+      );
+    expect(scores.scored).toEqual(
+      generations.map((span, i) => ({
+        target: {
+          traceId: span.spanContext().traceId,
+          observationId: span.spanContext().spanId,
+        },
+        verification: i === 0 ? failedTotal : passed,
+      })),
+    );
+    expect(scores.flushes()).toBe(1);
   });
 
   it("ends a failed generation with the error and rethrows it", async () => {

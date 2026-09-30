@@ -43,7 +43,11 @@ export interface GenerationOptions<T> {
   model: string;
   /** The registry prompt to link, when the registry served it. */
   prompt?: PromptLink | undefined;
-  /** What the model was asked, without document bytes (ADR-0011). */
+  /**
+   * What the model was asked, without document bytes (ADR-0011). Avoid the
+   * keys `text` and `messages`: the OTel export turns such an object into
+   * chat messages and drops every other key (@mastra/otel-exporter 1.x).
+   */
   input?: Record<string, unknown>;
   /** What of the result to record as output, e.g. the invoice. */
   output?: (result: T) => object;

@@ -17,7 +17,9 @@ import {
   shouldUseRepair,
 } from "@invariant/extractor";
 import {
+  type GenerationRef,
   type PromptResolver,
+  type ScoreSink,
   setBranch,
   setStepOutput,
   setTraceMetadata,
@@ -85,10 +87,17 @@ const WorkflowInputSchema = z.object({
   filename: z.string().optional(),
 });
 
+/** Where the extraction's generation is in Langfuse (tracing on only), for its scores. */
+const GenerationRefSchema = z.object({
+  traceId: z.string(),
+  observationId: z.string(),
+});
+
 const ExtractedSchema = z.object({
   documentId: z.string(),
   invoice: InvoiceSchema,
   promptVersion: z.string(),
+  generation: GenerationRefSchema.optional(),
 });
 const VerifiedSchema = ExtractedSchema.extend({ issues: z.array(IssueSchema) });
 // Runs suspended before the repair step existed resume without `repaired`.
@@ -115,8 +124,9 @@ const localPrompts: PromptResolver = async (prompt) => ({
  * Dependencies are injected so tests can pass a mock model and a test database.
  *
  * When tracing is on (ADR-0011), each model call is a generation span, linked
- * to its registry prompt and carrying its input and output (ADR-0012), and the
- * step that ends the run sets its branch on the trace. With tracing off, every
+ * to its registry prompt and carrying its input and output, each verified
+ * generation gets the rule results as scores (ADR-0012), and the step that
+ * ends the run sets its branch on the trace. With tracing off, every
  * tracing call is a no-op.
  */
 export function createProcessDocumentWorkflow(deps: {
@@ -124,6 +134,8 @@ export function createProcessDocumentWorkflow(deps: {
   model: LanguageModel;
   /** Resolves the pinned prompt versions (see @invariant/observability). */
   resolvePrompt?: PromptResolver | undefined;
+  /** Sends rule results as scores of the verified generation (ADR-0012). */
+  scores?: ScoreSink | undefined;
 }) {
   const { db, model } = deps;
   const resolvePrompt = deps.resolvePrompt ?? localPrompts;
@@ -168,6 +180,7 @@ export function createProcessDocumentWorkflow(deps: {
         const prompt = await resolvePrompt(EXTRACT_TEXT_PROMPT);
         const {
           result: { invoice, promptVersion },
+          generation,
         } = await withGeneration(
           tracingContext,
           {
@@ -176,7 +189,7 @@ export function createProcessDocumentWorkflow(deps: {
             prompt: prompt.link,
             input: {
               promptVersion: EXTRACT_TEXT_PROMPT_VERSION,
-              text: inputData.text,
+              source: inputData.text,
             },
             output: (result) => result.invoice,
           },
@@ -186,7 +199,12 @@ export function createProcessDocumentWorkflow(deps: {
             }),
         );
         setTraceMetadata(tracingContext, { promptVersion });
-        return { documentId: inputData.documentId, invoice, promptVersion };
+        return {
+          documentId: inputData.documentId,
+          invoice,
+          promptVersion,
+          ...(generation ? { generation } : {}),
+        };
       } catch (error) {
         await setDocumentStatus(db, inputData.documentId, "rejected");
         setBranch(tracingContext, "failed");
@@ -203,10 +221,13 @@ export function createProcessDocumentWorkflow(deps: {
     id: "verify",
     inputSchema: ExtractedSchema,
     outputSchema: VerifiedSchema,
-    execute: async ({ inputData }) => ({
-      ...inputData,
-      issues: verifyInvoice(inputData.invoice).violations,
-    }),
+    execute: async ({ inputData }) => {
+      const verification = verifyInvoice(inputData.invoice);
+      if (inputData.generation) {
+        deps.scores?.ruleScores(inputData.generation, verification);
+      }
+      return { ...inputData, issues: verification.violations };
+    },
   });
 
   // Repair once before asking (ADR-0010): when an error rule fails, the model gets
@@ -227,15 +248,16 @@ export function createProcessDocumentWorkflow(deps: {
       // The source text comes from the run's input, so it is not copied into every step.
       const { text } = WorkflowInputSchema.parse(getInitData());
       let repaired: Awaited<ReturnType<typeof repairInvoice>>;
+      let generation: GenerationRef | undefined;
       try {
         const prompt = await resolvePrompt(REPAIR_PROMPT);
-        ({ result: repaired } = await withGeneration(
+        ({ result: repaired, generation } = await withGeneration(
           tracingContext,
           {
             name: REPAIR_PROMPT_VERSION,
             model: modelId,
             prompt: prompt.link,
-            input: { promptVersion: REPAIR_PROMPT_VERSION, text },
+            input: { promptVersion: REPAIR_PROMPT_VERSION, source: text },
             output: (result) => result.invoice,
           },
           () =>
@@ -247,7 +269,10 @@ export function createProcessDocumentWorkflow(deps: {
         // A failed repair call is not a failed document: a person still reviews it.
         return original;
       }
-      const issues = verifyInvoice(repaired.invoice).violations;
+      const verification = verifyInvoice(repaired.invoice);
+      // Scored whether or not it is used: the repair has its own result.
+      if (generation) deps.scores?.ruleScores(generation, verification);
+      const issues = verification.violations;
       if (!shouldUseRepair(errorCount(inputData.issues), errorCount(issues))) {
         return original;
       }

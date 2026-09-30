@@ -70,7 +70,7 @@ describe("withGeneration", () => {
         name: "extract-text-v1",
         model: "gpt-5-mini",
         prompt: { name: "extract-text", version: 1 },
-        input: { promptVersion: "extract-text-v1", text: "FACTURA F-1" },
+        input: { promptVersion: "extract-text-v1", source: "FACTURA F-1" },
         output: (r) => r.invoice,
       },
       async () => result,
@@ -82,7 +82,7 @@ describe("withGeneration", () => {
     const [generation] = exporter.getSpansByType(SpanType.MODEL_INFERENCE);
     expect(generation?.input).toEqual({
       promptVersion: "extract-text-v1",
-      text: "FACTURA F-1",
+      source: "FACTURA F-1",
     });
     expect(generation?.output).toEqual({ totalCents: 1210 });
     // @mastra/langfuse turns this into the observation's prompt link.

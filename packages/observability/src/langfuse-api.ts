@@ -46,7 +46,8 @@ export async function fetchObservations(
   return observations;
 }
 
-function basicAuth(settings: LangfuseSettings): string {
+/** The Basic auth header of the public API: public key and secret key. */
+export function basicAuth(settings: LangfuseSettings): string {
   return `Basic ${Buffer.from(`${settings.publicKey}:${settings.secretKey}`).toString("base64")}`;
 }
 
