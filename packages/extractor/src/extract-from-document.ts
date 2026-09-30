@@ -27,7 +27,7 @@ export class UnsupportedDocumentError extends Error {
   override name = "UnsupportedDocumentError";
 }
 
-function assertSupported(document: Document): void {
+export function assertSupported(document: Document): void {
   if (
     !(SUPPORTED_MEDIA_TYPES as readonly string[]).includes(document.mediaType)
   )

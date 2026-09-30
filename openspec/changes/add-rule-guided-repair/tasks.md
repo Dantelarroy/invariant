@@ -7,12 +7,12 @@
 
 ## 2. Repair in `@invariant/extractor`
 
-- [ ] 2.1 RED: add `repair.test.ts` with a mock model. Verify that the tests fail. Cases:
+- [x] 2.1 RED: add `repair.test.ts` with a mock model. Verify that the tests fail. Cases:
   - a text source → one call whose user message has the repair instructions, the error messages and the original text, and nothing from the previous answer;
   - a document source → a `file` part with the same bytes and media type;
   - the result has prompt version `repair-v1`;
   - calling it with no errors throws, because it is a programming error.
-- [ ] 2.2 GREEN: add `prompts/repair-v1.ts` and `repairInvoice(source, errors, model)` on top of `extractWithModel`, and export them. Verify with `pnpm test packages/extractor`.
+- [x] 2.2 GREEN: add `prompts/repair-v1.ts` and `repairInvoice(source, errors, model)` on top of `extractWithModel`, and export them. Verify with `pnpm test packages/extractor`.
 
 ## 3. Workflow repair step and concrete question
 
