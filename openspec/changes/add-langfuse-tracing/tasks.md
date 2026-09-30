@@ -7,9 +7,9 @@
 
 ## 2. `@invariant/observability` and extractor timing
 
-- [ ] 2.1 RED/GREEN: `extractWithModel` also returns `modelId` and `latencyMs`. Existing extractor tests keep passing, and a new test asserts both fields with a mock model. Verify with `pnpm test packages/extractor`.
-- [ ] 2.2 Scaffold `packages/observability` with the pinned dependencies. Verify with `pnpm install && pnpm typecheck`.
-- [ ] 2.3 RED/GREEN, with an in-memory exporter or fake span objects: verify with `pnpm test packages/observability`. Cover:
+- [x] 2.1 RED/GREEN: `extractWithModel` also returns `modelId` and `latencyMs`. Existing extractor tests keep passing, and a new test asserts both fields with a mock model. Verify with `pnpm test packages/extractor`.
+- [x] 2.2 Scaffold `packages/observability` with the pinned dependencies. Verify with `pnpm install && pnpm typecheck`.
+- [x] 2.3 RED/GREEN, with an in-memory exporter or fake span objects: verify with `pnpm test packages/observability`. Cover:
   - `createObservability(env)` returns `undefined` without `LANGFUSE_BASE_URL`, and a config pointing at that URL with it;
   - `withGeneration` ends the span with model, usage and name on success, and with the error on failure, rethrowing the original error;
   - `setBranch` writes the metadata and the tag on the root span.

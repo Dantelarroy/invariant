@@ -11,6 +11,10 @@ export interface ExtractionResult {
   invoice: Invoice;
   promptVersion: string;
   usage: { inputTokens: number | undefined; outputTokens: number | undefined };
+  /** The model id the provider answered with (e.g. a dated snapshot), for tracing. */
+  modelId: string;
+  /** Wall-clock time of the model call, in milliseconds. */
+  latencyMs: number;
 }
 
 /** What the model is asked: optional instructions plus the conversation. */
@@ -30,6 +34,7 @@ export async function extractWithModel(
   model: LanguageModel,
   promptVersion: string,
 ): Promise<ExtractionResult> {
+  const started = performance.now();
   const result = await generateText({
     model,
     ...(prompt.instructions === undefined
@@ -38,6 +43,7 @@ export async function extractWithModel(
     messages: prompt.messages,
     output: Output.object({ schema: ModelInvoiceSchema, name: "invoice" }),
   });
+  const latencyMs = Math.round(performance.now() - started);
 
   return {
     invoice: toInvoice(result.output),
@@ -46,5 +52,7 @@ export async function extractWithModel(
       inputTokens: result.usage.inputTokens,
       outputTokens: result.usage.outputTokens,
     },
+    modelId: result.response.modelId,
+    latencyMs,
   };
 }
