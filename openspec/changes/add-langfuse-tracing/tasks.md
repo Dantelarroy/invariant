@@ -2,8 +2,8 @@
 
 ## 1. Local Langfuse stack
 
-- [ ] 1.1 Add `infra/langfuse/docker-compose.yml` (images pinned per design 1, binds to 127.0.0.1, `mem_limit`s, ClickHouse low-memory `config.d`, `TELEMETRY_ENABLED=false`, headless init with local-only org, project, user and keys) and the root scripts `langfuse:up` / `langfuse:down`. Verify that `pnpm langfuse:up` becomes healthy, that `GET /api/public/health` answers, and that an authenticated public API call with the local keys succeeds.
-- [ ] 1.2 Record the idle memory of each container (`docker stats --no-stream`) with Postgres and the validator up, and put it in `docs/observability.md`. Verify that the total fits under the 5 GB WSL limit.
+- [x] 1.1 Add `infra/langfuse/docker-compose.yml` (images pinned per design 1, binds to 127.0.0.1, `mem_limit`s, ClickHouse low-memory `config.d`, `TELEMETRY_ENABLED=false`, headless init with local-only org, project, user and keys) and the root scripts `langfuse:up` / `langfuse:down`. Verify that `pnpm langfuse:up` becomes healthy, that `GET /api/public/health` answers, and that an authenticated public API call with the local keys succeeds.
+- [x] 1.2 Record the idle memory of each container (`docker stats --no-stream`) with Postgres and the validator up, and put it in `docs/observability.md`. Verify that the total fits under the 5 GB WSL limit.
 
 ## 2. `@invariant/observability` and extractor timing
 

@@ -20,7 +20,9 @@
     "erp:up": "docker compose -f infra/erp/docker-compose.yml up -d",
     "erp:down": "docker compose -f infra/erp/docker-compose.yml down",
     "erp:setup": "pnpm --filter @invariant/synth erp:setup",
-    "synth:erp": "pnpm --filter @invariant/synth generate:erp"
+    "synth:erp": "pnpm --filter @invariant/synth generate:erp",
+    "langfuse:up": "docker compose -f infra/langfuse/docker-compose.yml up -d --wait",
+    "langfuse:down": "docker compose -f infra/langfuse/docker-compose.yml down"
   },
   "packageManager": "pnpm@10.29.2",
   "devDependencies": {
