@@ -24,7 +24,7 @@
 
 ## 4. Report and the 50-document run
 
-- [ ] 4.1 RED/GREEN: the pure report aggregation (counts, total cost, nearest-rank p50/p95 per model, generation name and branch) with fixture traces; then the `obs:report` CLI over the public API with the retry-until-stable loop. Verify with `pnpm test packages/observability`.
+- [x] 4.1 RED/GREEN: the pure report aggregation (counts, total cost, nearest-rank p50/p95 per model, generation name and branch) with fixture traces; then the `obs:report` CLI over the public API with the retry-until-stable loop. Verify with `pnpm test packages/observability`.
 - [ ] 4.2 With Langfuse up and tracing on, run `pnpm eval:extract --dataset data/synth-erp --limit 50` and process both text fixtures through the workflow (use copies if they are duplicates). Then run `pnpm obs:report`. Verify that Langfuse shows 50 eval traces and the pipeline traces with their branches.
-- [ ] 4.3 Write `docs/observability.md`: how to start and stop, how to turn tracing on, the report output from 4.2, and a short walkthrough from a `needs_review` trace to its cause. Verify that the walkthrough steps match the UI.
+- [x] 4.3 Write `docs/observability.md`: how to start and stop, how to turn tracing on, the report output from 4.2, and a short walkthrough from a `needs_review` trace to its cause. Verify that the walkthrough steps match the UI.
 - [ ] 4.4 Integration: run `pnpm lint && pnpm typecheck && pnpm test && pnpm py:check` without `LANGFUSE_BASE_URL`, confirming tracing off changes nothing. Open the PR and confirm that CI is green.
