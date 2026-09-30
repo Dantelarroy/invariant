@@ -22,4 +22,4 @@
 
 ## 4. Check
 
-- [ ] 4.1 With Langfuse up: run `pnpm prompts:seed`, then process one text fixture copy. Verify through the API that the generation has the prompt link, input and output, and the 9 scores. Then run `pnpm lint && pnpm typecheck && pnpm test && pnpm py:check`, open the PR and confirm that CI is green.
+- [x] 4.1 With Langfuse up: run `pnpm prompts:seed`, then process one text fixture copy. Verify through the API that the generation has the prompt link, input and output, and the 9 scores. Then run `pnpm lint && pnpm typecheck && pnpm test && pnpm py:check`, open the PR and confirm that CI is green.
