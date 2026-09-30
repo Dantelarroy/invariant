@@ -2,7 +2,7 @@
 
 ## 1. Review fixtures
 
-- [ ] 1.1 RED/GREEN: `renderInvoiceText` and `injectError`, one error per invoice, covering all kinds, deterministic with a seed, and the manifest holding the true value. Add the `synth:review --count --seed` CLI. Verify with `pnpm test packages/synth`, and check that running the CLI twice gives identical files.
+- [x] 1.1 RED/GREEN: `renderInvoiceText` and `injectError`, one error per invoice, covering all kinds, deterministic with a seed, and the manifest holding the true value. Add the `synth:review --count --seed` CLI. Verify with `pnpm test packages/synth`, and check that running the CLI twice gives identical files.
 
 ## 2. Resume with a corrected invoice
 
