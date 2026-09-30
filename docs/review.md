@@ -94,4 +94,30 @@ The 12 fixtures (`--count 12 --seed 1`) were processed with tracing on, gpt-5-mi
 - The `line-amount` fixtures pause too. The rule itself is only a warning, but a wrong line no longer adds up to the printed base, so `lines-sum` fails.
 - The model read every IRPF withholding (`-136,58 €`) as a negative amount. That makes `total` fail even where the printed total was right. These items (002, 003, 004, 005) and 012 need `corrected`. The others copy the document faithfully and are `correct`.
 
-<!-- Sync and export results (task 4.3) are added here after the review. -->
+### Review, sync and export
+
+Dante reviewed all 12 items in the Langfuse UI: **7 `correct`, 5 `corrected`**.
+- **002, 003, 004, 005:** `withholdingCents` made positive.
+- **012:** line 1 (milk) `vatRateBps` 1000 → 400. The printed 4 % base, 29,52 €, is milk plus tomato.
+
+`pnpm review:sync`:
+
+```text
+12 completed reviews · 12 resumed · 0 already resolved · 0 need attention
+```
+
+- All 12 paused runs were accepted, reviewed by `langfuse:<user id>`. 007 is marked `repaired`, because the repair was the extraction under review.
+- For corrected invoices the sync logs which rules still fail, for example `still breaks: total`. That is expected: the golden invoice is what is printed, and each fixture prints one error on purpose (ADR-0013).
+- A second `pnpm review:sync` resumed nothing: `12 completed reviews · 0 resumed · 12 already resolved`.
+
+`pnpm golden:export`:
+
+```text
+✔ 12 golden records (7 correct · 5 corrected; 0 before) · 0 skipped
+```
+
+`data/golden/golden.jsonl` has 12 records. The corrected values match what was entered:
+- withholding 13658, 63460, 40506 and 1905 cents;
+- `FAC-2025-2454` with line rates `400,1000,1000,400`.
+
+**Finding for the next change:** `extract-text-v1` reads a printed IRPF withholding as negative, the same failure `extract-document-v2` fixed for documents. The four corrected records are the evidence for an `extract-text-v2`.
