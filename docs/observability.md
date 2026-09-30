@@ -115,12 +115,10 @@ The accepted invoice made one model call. The wrong-total invoice made two (extr
 
 ## From a `needs_review` trace to its cause
 
-This walkthrough follows the `invoice-002-wrong-total` fixture, run with tracing on. It was checked through the public API, which returns the same objects the UI shows.
+This walkthrough follows the `invoice-002-wrong-total` fixture (trace `5612cb6b…`, 2026-09-30), run with tracing on. It was checked in the Langfuse UI (v4.47.0), signed in as the local user.
 
-1. **Find the trace.** In *Tracing*, filter environment `pipeline` and tag `needs_review`. The trace `process-document` has metadata `branch: needs_review`, the `documentId`, `model: gpt-5-mini`, `promptVersion: extract-text-v1` and the file name.
-2. **Read the steps.** The tree shows `workflow_step ingest → extract → verify → repair → human-review`. `repair` took 64 s, most of the 72 s run; `extract` took 8 s.
-3. **Read the question.** The output of `workflow_step human-review` is the review request: the `total` rule failed (`printedCents: 11285`, `expectedCents: 10285`) and the question is *"El total impreso es 112,85 € pero base + IVA − retención da 102,85 €. ¿El total del documento es 112,85 €?"*.
-4. **Check the model calls.** Under `extract` and `repair` are the generations with the model the provider answered with (`gpt-5-mini-2025-08-07`), tokens and cost. The repair did not remove the error: the invoice itself prints a wrong total, and the repair prompt copies what is printed (ADR-0010).
-5. **See the decision.** After `pnpm review <run-id> approve`, the same trace has a nested `process-document` run with `human-review → persist` and `branch: accepted`.
-
-This trace was recorded before generations were exported with their model and tokens, so in it they show as plain spans named `model_generation gpt-5-mini-2025-08-07` without cost. Traces recorded now show a generation named `extract-text-v1` or `repair-v1` with model, tokens and cost.
+1. **Find the trace.** In *Tracing*, pick the trace tagged `pipeline` and `needs_review`. Its header shows the whole run: 16.32 s, $0.004109 and 3,037 tokens. The root `invoke_workflow process-document` has metadata `branch: needs_review`, the `documentId`, `model: gpt-5-mini`, `promptVersion: extract-text-v1` and the file name.
+2. **Read the steps.** The tree shows `workflow_step ingest → extract → verify → repair → human-review`. `extract` took 7.85 s and `repair` 7.88 s; the other steps took well under a second.
+3. **Read the question.** Select `workflow_step human-review`. Its input is the extracted invoice, whose `totalCents` is 11285, with the rule issues. Its output is the review request, with the question *"El total impreso es 112,85 € pero base + IVA − retención da 102,85 €. ¿El total del documento es 112,85 €?"*. The `total` issue holds `printedCents: 11285` and `expectedCents: 10285`.
+4. **Check the model calls.** Under `extract` is the generation `extract-text-v1` (7.83 s, $0.001957); under `repair` is `repair-v1` (7.86 s, $0.002152). Each carries the model the provider answered with (`gpt-5-mini-2025-08-07`) and its tokens. The repair did not remove the error: the invoice itself prints a wrong total, and the repair prompt copies what is printed (ADR-0010). Cause found: the document, not the extraction.
+5. **See the decision.** After `pnpm review <run-id> approve`, the same trace gains a nested `process-document` run with `human-review → persist` and `branch: accepted`.
