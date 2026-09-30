@@ -5,6 +5,7 @@ export {
   type RuleContext,
   type Severity,
   type Violation,
+  type ViolationDetails,
 } from "./rules.js";
 export { type TaxIdCheck, validateSpanishTaxId } from "./tax-id.js";
 export { type VerificationResult, verifyInvoice } from "./verify.js";
