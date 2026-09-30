@@ -28,6 +28,6 @@
 
 ## 4. Measure repair
 
-- [ ] 4.1 RED/GREEN: add a `--repair` option to the eval runner with a unit test using a fake extractor and repairer: before and after summaries, repairs attempted and used. Verify with `pnpm test packages/evals`.
-- [ ] 4.2 Run `pnpm eval:extract --dataset data/synth --format jpg --limit 20 --repair` with gpt-5-mini, and `pnpm extract:text fixtures/text/invoice-002-wrong-total.txt`. Record in `docs/evals.md` the before/after table and the concrete question the fixture produces. Verify that the numbers match the report.
-- [ ] 4.3 Integration: run `pnpm lint && pnpm typecheck && pnpm test && pnpm py:check`, open the PR and confirm that CI is green.
+- [x] 4.1 RED/GREEN: add a `--repair` option to the eval runner with a unit test using a fake extractor and repairer: before and after summaries, repairs attempted and used. Verify with `pnpm test packages/evals`.
+- [x] 4.2 Run `pnpm eval:extract --dataset data/synth --format jpg --limit 20 --repair` with gpt-5-mini, and `pnpm extract:text fixtures/text/invoice-002-wrong-total.txt`. Record in `docs/evals.md` the before/after table and the concrete question the fixture produces. Verify that the numbers match the report.
+- [ ] 4.3 Integration: run `pnpm lint && pnpm typecheck && pnpm test && pnpm py:check`, open the PR and confirm that CI is green. (Local checks pass on 2026-09-30; the PR and its CI are pending.)

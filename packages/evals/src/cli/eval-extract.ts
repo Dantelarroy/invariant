@@ -6,18 +6,30 @@ import { openai } from "@ai-sdk/openai";
 import {
   EXTRACT_DOCUMENT_PROMPT_VERSION,
   extractInvoiceFromDocument,
+  REPAIR_PROMPT_VERSION,
+  repairInvoice,
 } from "@invariant/extractor";
-import { type DocumentFormat, loadDataset, MEDIA_TYPES } from "../dataset.js";
+import {
+  type DatasetItem,
+  type DocumentFormat,
+  loadDataset,
+  MEDIA_TYPES,
+} from "../dataset.js";
 import { evaluateDocuments } from "../run.js";
 import { SCORED_FIELDS } from "../score.js";
-import { type Summary, summarize } from "../summarize.js";
+import {
+  type RepairSummary,
+  type Summary,
+  summarize,
+  summarizeRepair,
+} from "../summarize.js";
 
 const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 const envPath = join(repoRoot, ".env");
 if (existsSync(envPath)) process.loadEnvFile(envPath);
 
 const USAGE =
-  "Usage: pnpm eval:extract --dataset <dir> --model <id> [--limit 20] [--format pdf|jpg|png|webp]";
+  "Usage: pnpm eval:extract --dataset <dir> [--model gpt-5-mini] [--limit 20] [--format pdf|jpg|png|webp] [--repair]";
 
 const { values } = parseArgs({
   options: {
@@ -25,13 +37,14 @@ const { values } = parseArgs({
     model: { type: "string" },
     limit: { type: "string", default: "20" },
     format: { type: "string", default: "pdf" },
+    // Repair documents with rule errors once and report before and after (ADR-0010).
+    repair: { type: "boolean", default: false },
   },
 });
 
 const limit = Number(values.limit);
 if (
   !values.dataset ||
-  !values.model ||
   !Number.isSafeInteger(limit) ||
   limit < 1 ||
   !(values.format in MEDIA_TYPES)
@@ -44,8 +57,10 @@ if (!process.env.OPENAI_API_KEY) {
   process.exit(1);
 }
 
-const modelId = values.model;
+// Same default as the API's EXTRACTION_MODEL.
+const modelId = values.model ?? process.env.EXTRACTION_MODEL ?? "gpt-5-mini";
 const format = values.format as DocumentFormat;
+const withRepair = values.repair === true;
 // pnpm runs the script inside packages/evals; INIT_CWD is where the user typed the command.
 const datasetDir = resolve(
   process.env.INIT_CWD ?? process.cwd(),
@@ -59,18 +74,25 @@ const startedAt = new Date().toISOString();
 const today = startedAt.slice(0, 10);
 const model = openai(modelId);
 
+const documentOf = (item: DatasetItem) => ({
+  bytes: readFileSync(item.path),
+  mediaType: item.mediaType,
+});
+
 console.log(
-  `${items.length} documents · ${modelId} · ${EXTRACT_DOCUMENT_PROMPT_VERSION} · ${format}`,
+  `${items.length} documents · ${modelId} · ${EXTRACT_DOCUMENT_PROMPT_VERSION}${withRepair ? ` + ${REPAIR_PROMPT_VERSION}` : ""} · ${format}`,
 );
 const documents = await evaluateDocuments(
   items,
-  (item) =>
-    extractInvoiceFromDocument(
-      { bytes: readFileSync(item.path), mediaType: item.mediaType },
-      model,
-    ),
+  (item) => extractInvoiceFromDocument(documentOf(item), model),
   {
     today,
+    ...(withRepair
+      ? {
+          repair: (item, issues) =>
+            repairInvoice({ document: documentOf(item) }, issues, model),
+        }
+      : {}),
     onResult: (r) => {
       const status = r.error
         ? `error: ${r.error}`
@@ -80,11 +102,19 @@ const documents = await evaluateDocuments(
               .filter(([, field]) => !field.match)
               .map(([name]) => name)
               .join(", ")}`;
-      console.log(`  ${r.id}  ${r.latencyMs} ms  ${status}`);
+      const repair = !r.repair?.attempted
+        ? ""
+        : r.repair.error
+          ? `  (repair failed: ${r.repair.error})`
+          : r.repair.used
+            ? "  (repaired)"
+            : "  (repair not used)";
+      console.log(`  ${r.id}  ${r.latencyMs} ms  ${status}${repair}`);
     },
   },
 );
 const summary = summarize(documents);
+const repairSummary = withRepair ? summarizeRepair(documents) : undefined;
 
 const stamp = startedAt.replace(/[-:]/g, "").slice(0, 15);
 const reportDir = join(repoRoot, "data", "evals");
@@ -101,11 +131,16 @@ writeFileSync(
         dataset: values.dataset,
         model: modelId,
         promptVersion: EXTRACT_DOCUMENT_PROMPT_VERSION,
+        ...(repairSummary
+          ? { repairPromptVersion: REPAIR_PROMPT_VERSION }
+          : {}),
         limit,
         format,
         startedAt,
       },
+      // With --repair, `summary` is after repair and `repair` holds both sides.
       summary,
+      ...(repairSummary ? { repair: repairSummary } : {}),
       documents,
     },
     null,
@@ -113,12 +148,18 @@ writeFileSync(
   )}\n`,
 );
 
-console.log(`\n${formatSummary(summary)}\n\nreport ${reportPath}`);
+const table = repairSummary
+  ? formatRepairSummary(repairSummary)
+  : formatSummary(summary);
+console.log(`\n${table}\n\nreport ${reportPath}`);
 
-/** A small aligned table: one metric per row. */
-function formatSummary(s: Summary): string {
-  const pct = (rate: number) => `${(rate * 100).toFixed(1)} %`;
-  const rows: [string, string][] = [
+function pct(rate: number): string {
+  return `${(rate * 100).toFixed(1)} %`;
+}
+
+/** One metric per row, as [label, value]. */
+function summaryRows(s: Summary): [string, string][] {
+  return [
     ["documents", String(s.documents)],
     ...SCORED_FIELDS.map((field): [string, string] => [
       field,
@@ -130,8 +171,37 @@ function formatSummary(s: Summary): string {
     ["tokens in / out", `${s.inputTokens} / ${s.outputTokens}`],
     ["median latency", `${s.medianLatencyMs} ms`],
   ];
+}
+
+/** A small aligned table: one metric per row. */
+function formatSummary(s: Summary): string {
+  const rows = summaryRows(s);
   const width = Math.max(...rows.map(([label]) => label.length));
   return rows
     .map(([label, value]) => `${label.padEnd(width)}  ${value.padStart(10)}`)
+    .join("\n");
+}
+
+/** Before and after repair side by side, then the repair counts. */
+function formatRepairSummary(r: RepairSummary): string {
+  const after = summaryRows(r.after);
+  const rows: [string, string, string][] = [
+    ["", "before", "after"],
+    ...summaryRows(r.before).map(
+      ([label, value], i): [string, string, string] => [
+        label,
+        value,
+        after[i]?.[1] ?? "",
+      ],
+    ),
+    ["repairs attempted", "", String(r.repairsAttempted)],
+    ["repairs used", "", String(r.repairsUsed)],
+  ];
+  const width = Math.max(...rows.map(([label]) => label.length));
+  return rows
+    .map(
+      ([label, before, afterValue]) =>
+        `${label.padEnd(width)}  ${before.padStart(16)}  ${afterValue.padStart(16)}`,
+    )
     .join("\n");
 }

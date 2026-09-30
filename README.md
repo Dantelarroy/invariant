@@ -29,10 +29,11 @@ pnpm erp:up && pnpm erp:setup              # local FacturaScripts (real invoicin
 pnpm synth:erp --count 50                  # invoices printed by FacturaScripts in data/synth-erp
 pnpm eval:extract --dataset data/synth-erp --model gpt-5-mini --limit 20   # score extraction against labels
 pnpm eval:extract --dataset data/synth --model gpt-5-mini --format jpg     # same, on degraded photos
+pnpm eval:extract --dataset data/synth --format jpg --repair              # same, repairing rule errors once
 pnpm ubl:check --dataset data/synth-erp --limit 50   # export labels to UBL and validate them (EN16931)
 ```
 
-`eval:extract` reads `labels.jsonl` plus one `<id>.<format>` file per label (`--format pdf|jpg|png|webp`, default `pdf`; `--limit` defaults to 20). It prints a summary table and writes a JSON report to `data/evals/`, which is git-ignored like the rest of `data/`: reports never get committed. Scoring rules are in [ADR-0008](docs/adr/0008-scoring-extractions.md).
+`eval:extract` reads `labels.jsonl` plus one `<id>.<format>` file per label (`--format pdf|jpg|png|webp`, default `pdf`; `--limit` defaults to 20; `--model` defaults to `EXTRACTION_MODEL` or `gpt-5-mini`). With `--repair`, every extraction with rule errors is repaired once and the better one kept, as in the workflow ([ADR-0010](docs/adr/0010-rule-guided-repair.md)); the table then shows before and after repair, plus repairs attempted and used. It prints a summary table and writes a JSON report to `data/evals/`, which is git-ignored like the rest of `data/`: reports never get committed. Scoring rules are in [ADR-0008](docs/adr/0008-scoring-extractions.md).
 
 `ubl:check` exports each label to EN16931 UBL and validates it with the official CEN schematron, served by the `validator` service in `docker-compose.yml` (`easybill/en16931-validator`, at `EN16931_VALIDATOR_URL`, default `http://127.0.0.1:8082`). Without `--limit` it checks the whole dataset. It prints how many documents are valid, refused (no UBL without both parties' Spanish tax ids) and invalid, the failures per EN16931 rule and the warnings apart, and exits non-zero if any document is invalid. The UBL integration tests run when `EN16931_VALIDATOR_URL` is set. Mapping decisions are in [ADR-0009](docs/adr/0009-ubl-mapping.md), results in [docs/ubl.md](docs/ubl.md).
 
