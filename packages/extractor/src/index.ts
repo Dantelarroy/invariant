@@ -16,4 +16,5 @@ export {
   type RepairIssue,
   type RepairSource,
   repairInvoice,
+  shouldUseRepair,
 } from "./repair.js";

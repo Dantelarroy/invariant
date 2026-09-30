@@ -16,15 +16,15 @@
 
 ## 3. Workflow repair step and concrete question
 
-- [ ] 3.1 RED: add `question.test.ts` for the Spanish question per error rule, covering the `total` example exactly, `lines-sum` with a `line-amount` warning (3 × 12,00 € vs 42,00 €) and the customer tax id. Verify that the tests fail.
-- [ ] 3.2 GREEN: implement `buildReviewQuestion(issues)` in `apps/api/src/review/question.ts`. Verify with `pnpm test apps/api`.
-- [ ] 3.3 RED: extend `process-document.test.ts` with scripted mock models (Postgres integration, as today). Verify that the new tests fail. Cases:
+- [x] 3.1 RED: add `question.test.ts` for the Spanish question per error rule, covering the `total` example exactly, `lines-sum` with a `line-amount` warning (3 × 12,00 € vs 42,00 €) and the customer tax id. Verify that the tests fail.
+- [x] 3.2 GREEN: implement `buildReviewQuestion(issues)` in `apps/api/src/review/question.ts`. Verify with `pnpm test apps/api`.
+- [x] 3.3 RED: extend `process-document.test.ts` with scripted mock models (Postgres integration, as today). Verify that the new tests fail. Cases:
   - no errors → one model call, accepted, not repaired;
   - wrong tax id, then fixed → two calls, accepted by rules, repaired, prompt version `repair-v1` persisted;
   - still wrong after repair → two calls, `needs_review` with the concrete question and the issues;
   - repair worse → the original is kept.
-- [ ] 3.4 GREEN: add the `repair` step (source via `getInitData()`), selection, `repaired` in the outcome, the question in the suspend payload, and "repaired" in `printResult`. Verify with `pnpm test apps/api`.
-- [ ] 3.5 Write `docs/adr/0010-rule-guided-repair.md`: what goes in the repair prompt and why, the selection rule, errors only, questions in Spanish, and a single attempt with a clean context (with the paper reference). Link it from `docs/architecture.md`. Verify that the links resolve.
+- [x] 3.4 GREEN: add the `repair` step (source via `getInitData()`), selection, `repaired` in the outcome, the question in the suspend payload, and "repaired" in `printResult`. Verify with `pnpm test apps/api`.
+- [x] 3.5 Write `docs/adr/0010-rule-guided-repair.md`: what goes in the repair prompt and why, the selection rule, errors only, questions in Spanish, and a single attempt with a clean context (with the paper reference). Link it from `docs/architecture.md`. Verify that the links resolve.
 
 ## 4. Measure repair
 

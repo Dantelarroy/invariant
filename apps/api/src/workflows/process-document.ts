@@ -2,16 +2,22 @@ import { createHash } from "node:crypto";
 import {
   createDocument,
   type Db,
+  findDocumentById,
   findDocumentBySha256,
   saveInvoice,
   setDocumentStatus,
 } from "@invariant/db";
-import { extractInvoiceFromText } from "@invariant/extractor";
+import {
+  extractInvoiceFromText,
+  repairInvoice,
+  shouldUseRepair,
+} from "@invariant/extractor";
 import { verifyInvoice } from "@invariant/rules";
 import { InvoiceSchema } from "@invariant/schema";
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import type { LanguageModel } from "ai";
 import { z } from "zod";
+import { buildReviewQuestion } from "../review/question.js";
 
 export const HUMAN_REVIEW_STEP_ID = "human-review";
 
@@ -38,6 +44,8 @@ export const OutcomeSchema = z.discriminatedUnion("kind", [
     invoiceId: z.string(),
     totalCents: z.number().int(),
     reviewedBy: z.string(),
+    /** True when the stored invoice came from the rule-guided repair (ADR-0010). */
+    repaired: z.boolean(),
   }),
   z.object({
     kind: z.literal("rejected"),
@@ -61,19 +69,32 @@ export const ReviewDecisionSchema = z.object({
 });
 export type ReviewDecision = z.infer<typeof ReviewDecisionSchema>;
 
+const WorkflowInputSchema = z.object({
+  text: z.string(),
+  filename: z.string().optional(),
+});
+
 const ExtractedSchema = z.object({
   documentId: z.string(),
   invoice: InvoiceSchema,
   promptVersion: z.string(),
 });
 const VerifiedSchema = ExtractedSchema.extend({ issues: z.array(IssueSchema) });
+// Runs suspended before the repair step existed resume without `repaired`.
+const RepairedSchema = VerifiedSchema.extend({
+  repaired: z.boolean().default(false),
+});
 const ReviewedSchema = ExtractedSchema.extend({
   approved: z.boolean(),
   reviewedBy: z.string(),
+  repaired: z.boolean(),
 });
 
+const errorCount = (issues: readonly { severity: string }[]) =>
+  issues.filter((issue) => issue.severity === "error").length;
+
 /**
- * ingest → extract → verify → human-review → persist.
+ * ingest → extract → verify → repair → human-review → persist.
  * Dependencies are injected so tests can pass a mock model and a test database.
  */
 export function createProcessDocumentWorkflow(deps: {
@@ -86,10 +107,7 @@ export function createProcessDocumentWorkflow(deps: {
   // unless it was rejected before, in which case it is retried.
   const ingest = createStep({
     id: "ingest",
-    inputSchema: z.object({
-      text: z.string(),
-      filename: z.string().optional(),
-    }),
+    inputSchema: WorkflowInputSchema,
     outputSchema: z.object({ documentId: z.string(), text: z.string() }),
     execute: async ({ inputData, bail }) => {
       const sha256 = createHash("sha256").update(inputData.text).digest("hex");
@@ -141,11 +159,49 @@ export function createProcessDocumentWorkflow(deps: {
     }),
   });
 
+  // Repair once before asking (ADR-0010): when an error rule fails, the model gets
+  // one clean-context retry with the violated rules. The repaired extraction is
+  // used only when it has fewer errors; a tie keeps the original.
+  const repair = createStep({
+    id: "repair",
+    inputSchema: VerifiedSchema,
+    outputSchema: RepairedSchema,
+    execute: async ({ inputData, getInitData }) => {
+      const original = { ...inputData, repaired: false };
+      if (errorCount(inputData.issues) === 0) return original;
+      // Mastra resumes by step position, so a run suspended before this step existed
+      // resumes here instead of at human-review. Its document is already waiting for
+      // review: skip, so the decision applies to the extraction the reviewer saw.
+      const document = await findDocumentById(db, inputData.documentId);
+      if (document?.status === "needs_review") return original;
+      // The source text comes from the run's input, so it is not copied into every step.
+      const { text } = WorkflowInputSchema.parse(getInitData());
+      let repaired: Awaited<ReturnType<typeof repairInvoice>>;
+      try {
+        repaired = await repairInvoice({ text }, inputData.issues, model);
+      } catch {
+        // A failed repair call is not a failed document: a person still reviews it.
+        return original;
+      }
+      const issues = verifyInvoice(repaired.invoice).violations;
+      if (!shouldUseRepair(errorCount(inputData.issues), errorCount(issues))) {
+        return original;
+      }
+      return {
+        documentId: inputData.documentId,
+        invoice: repaired.invoice,
+        promptVersion: repaired.promptVersion,
+        issues,
+        repaired: true,
+      };
+    },
+  });
+
   // Ask instead of guess: if any rule fails with an error, the run pauses (its state is
   // saved in Postgres) until a person approves or rejects the extraction.
   const humanReview = createStep({
     id: HUMAN_REVIEW_STEP_ID,
-    inputSchema: VerifiedSchema,
+    inputSchema: RepairedSchema,
     outputSchema: ReviewedSchema,
     suspendSchema: ReviewRequestSchema,
     resumeSchema: ReviewDecisionSchema,
@@ -160,8 +216,7 @@ export function createProcessDocumentWorkflow(deps: {
         return await suspend({
           documentId: extracted.documentId,
           issues,
-          question:
-            "Some business rules fail. Is the extraction faithful to the document?",
+          question: buildReviewQuestion(issues),
         });
       }
       return {
@@ -177,8 +232,14 @@ export function createProcessDocumentWorkflow(deps: {
     inputSchema: ReviewedSchema,
     outputSchema: OutcomeSchema,
     execute: async ({ inputData }) => {
-      const { documentId, invoice, promptVersion, approved, reviewedBy } =
-        inputData;
+      const {
+        documentId,
+        invoice,
+        promptVersion,
+        approved,
+        reviewedBy,
+        repaired,
+      } = inputData;
       if (!approved) {
         await setDocumentStatus(db, documentId, "rejected");
         return { kind: "rejected" as const, documentId, reviewedBy };
@@ -196,21 +257,20 @@ export function createProcessDocumentWorkflow(deps: {
         invoiceId,
         totalCents: invoice.totalCents,
         reviewedBy,
+        repaired,
       };
     },
   });
 
   return createWorkflow({
     id: "process-document",
-    inputSchema: z.object({
-      text: z.string(),
-      filename: z.string().optional(),
-    }),
+    inputSchema: WorkflowInputSchema,
     outputSchema: OutcomeSchema,
   })
     .then(ingest)
     .then(extract)
     .then(verify)
+    .then(repair)
     .then(humanReview)
     .then(persist)
     .commit();

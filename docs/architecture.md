@@ -25,9 +25,9 @@ Cross-cutting: Langfuse traces every step (cost, latency, rule scores), human co
 | Invoice contract | `@invariant/schema` | Shape of an invoice (Zod). No business rules. |
 | Ledger | `@invariant/db` | Postgres system of record (Drizzle). Idempotent by file SHA-256. |
 | Rule verifier | `@invariant/rules` | Business invariants; also served over HTTP as the RL reward. |
-| Extractor | `@invariant/extractor` | VLM extraction and the small → frontier cascade. |
+| Extractor | `@invariant/extractor` | VLM extraction, rule-guided repair ([ADR-0010](adr/0010-rule-guided-repair.md)) and the small → frontier cascade. |
 | E-invoice | `@invariant/ubl` | UBL generation ([ADR-0009](adr/0009-ubl-mapping.md)) and EN16931 validation. |
-| Orchestration | `apps/api`, `apps/worker` | mastra workflows (suspend/resume for human review), queue consumer. |
+| Orchestration | `apps/api`, `apps/worker` | mastra workflows (repair once, then suspend/resume for human review with a concrete question, [ADR-0010](adr/0010-rule-guided-repair.md)), queue consumer. |
 | Observability & evals | `@invariant/observability`, `@invariant/evals` | Langfuse tracing, annotation queue, field-level accuracy ([ADR-0008](adr/0008-scoring-extractions.md)), CI gate. |
 | Agent | `@invariant/agent`, `@invariant/mcp-server` | Tools over the ledger, exposed via MCP. |
 | Training | `python/training` | SFT + GRPO of a small VLM with rule-based rewards. |
