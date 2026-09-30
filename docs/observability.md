@@ -61,27 +61,57 @@ LANGFUSE_BASE_URL=http://127.0.0.1:3000 pnpm obs:report --since 2026-09-30T07:25
 - Ingestion is asynchronous, so it reads until the trace count stops changing and prints how many reads it took.
 - `--since` defaults to 24 hours ago; `--env` defaults to `eval`.
 
-### Day 11 run (2026-09-30, partial)
+### Day 11 run (2026-09-30)
 
-The planned run was 50 FacturaScripts PDFs with gpt-5-mini. It was stopped after 12 documents because the Windows host ran out of memory (1 GB free of 7.8 GB with WSL at 5 GB); the containers themselves stayed healthy. The 12th document finished, but its spans were still buffered when the process was killed, so 11 traces reached Langfuse:
+50 FacturaScripts PDFs (`data/synth-erp`, first 50 labels), gpt-5-mini, prompt `extract-document-v2`, tracing on:
 
-```text
-environment eval · since 2026-09-30T07:25:15.000Z · 2 reads
-traces        11
-model calls   11
-total cost    $0.0341
-
-model                  traces  calls     cost       p50       p95
-gpt-5-mini-2025-08-07      11     11  $0.0341  10362 ms  30819 ms
-
-prompt version       traces  calls     cost       p50       p95
-extract-document-v2      11     11  $0.0341  10362 ms  30819 ms
-
-branch  traces  calls     cost       p50       p95
-(none)      11     11  $0.0341  10362 ms  30819 ms
+```bash
+LANGFUSE_BASE_URL=http://127.0.0.1:3000 pnpm eval:extract --dataset data/synth-erp --limit 50
+LANGFUSE_BASE_URL=http://127.0.0.1:3000 pnpm obs:report --env eval --since 2026-09-30T11:42:03Z
 ```
 
-Every one of the 11 was an exact match. Cost per document was about $0.003.
+```text
+environment eval · since 2026-09-30T11:42:03.000Z · 2 reads
+traces        50
+model calls   50
+total cost    $0.1585
+
+model                  traces  calls     cost       p50       p95
+gpt-5-mini-2025-08-07      50     50  $0.1585  10891 ms  14644 ms
+
+prompt version       traces  calls     cost       p50       p95
+extract-document-v2      50     50  $0.1585  10891 ms  14644 ms
+
+branch  traces  calls     cost       p50       p95
+(none)      50     50  $0.1585  10891 ms  14644 ms
+```
+
+- **Accuracy:** all 50 were exact matches with a 100 % rule pass. Eval report: `synth-erp-gpt-5-mini-20260930T114242.json`.
+- **Cost:** about $0.0032 per document; 78,686 input and 69,416 output tokens.
+- **Branch:** eval traces have no branch, because branches belong to workflow runs.
+- **Memory:** the first two attempts were stopped by host memory pressure on this 8 GB laptop (WSL at 5 GB, under 1 GB left for Windows). The run completed with the EN16931 validator stopped and no other heavy apps open. Run Langfuse on demand and stop it (`pnpm langfuse:down`) between sessions.
+
+Both text fixtures run through the workflow with tracing on (copies with added newlines, since the originals are already in the database; `pnpm obs:report --env pipeline --since 2026-09-30T11:52:57Z`):
+
+```text
+environment pipeline · since 2026-09-30T11:52:57.000Z · 2 reads
+traces        2
+model calls   3
+total cost    $0.0067
+
+model                  traces  calls     cost      p50       p95
+gpt-5-mini-2025-08-07       2      3  $0.0067  9099 ms  16324 ms
+
+prompt version   traces  calls     cost       p50       p95
+extract-text-v1       2      2  $0.0045   9099 ms  16324 ms
+repair-v1             1      1  $0.0022  16324 ms  16324 ms
+
+branch        traces  calls     cost       p50       p95
+accepted           1      1  $0.0025   9099 ms   9099 ms
+needs_review       1      2  $0.0041  16324 ms  16324 ms
+```
+
+The accepted invoice made one model call. The wrong-total invoice made two (extraction and one repair) and ended in `needs_review`, so a review costs about 1.6× an accepted document here.
 
 ## From a `needs_review` trace to its cause
 
