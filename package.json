@@ -23,7 +23,8 @@
     "synth:erp": "pnpm --filter @invariant/synth generate:erp",
     "langfuse:up": "docker compose -f infra/langfuse/docker-compose.yml up -d --wait",
     "langfuse:down": "docker compose -f infra/langfuse/docker-compose.yml down",
-    "obs:report": "pnpm --filter @invariant/observability obs:report"
+    "obs:report": "pnpm --filter @invariant/observability obs:report",
+    "prompts:seed": "pnpm --filter @invariant/observability prompts:seed"
   },
   "packageManager": "pnpm@10.29.2",
   "devDependencies": {
