@@ -35,6 +35,9 @@ export {
 export {
   BRANCHES,
   type Branch,
+  type Generated,
+  type GenerationOptions,
+  type GenerationRef,
   type GenerationResult,
   setBranch,
   setStepOutput,

@@ -3,6 +3,7 @@ import {
   SpanType,
   type TracingContext,
 } from "@mastra/core/observability";
+import type { PromptLink } from "./prompts.js";
 
 /** How a document run ended; set on its trace as metadata and as a tag. */
 export const BRANCHES = [
@@ -19,6 +20,33 @@ export type Branch = (typeof BRANCHES)[number];
 export interface GenerationResult {
   modelId: string;
   usage: { inputTokens: number | undefined; outputTokens: number | undefined };
+}
+
+/** Where a generation is in Langfuse: scores target it (ADR-0012). */
+export interface GenerationRef {
+  traceId: string;
+  /** The Mastra span id, which is the Langfuse observation id. */
+  observationId: string;
+}
+
+/** What a model call recorded under `withGeneration` returns. */
+export interface Generated<T> {
+  result: T;
+  /** Undefined when tracing is off. */
+  generation: GenerationRef | undefined;
+}
+
+export interface GenerationOptions<T> {
+  /** The prompt version, e.g. "extract-text-v1": the generation's name. */
+  name: string;
+  /** The model requested. */
+  model: string;
+  /** The registry prompt to link, when the registry served it. */
+  prompt?: PromptLink | undefined;
+  /** What the model was asked, without document bytes (ADR-0011). */
+  input?: Record<string, unknown>;
+  /** What of the result to record as output, e.g. the invoice. */
+  output?: (result: T) => object;
 }
 
 /** Tracing must never change what a run does: a tracing failure is only logged. */
@@ -51,17 +79,36 @@ function rootOf(tracing: TracingContext | undefined): AnySpan | undefined {
  * usage only on MODEL_INFERENCE spans. The model goes in `responseModel`
  * because a `model` attribute renames the span to "chat <model>" and the
  * prompt version would be lost (both verified against Langfuse 4.47).
+ *
+ * With `prompt`, the span metadata carries `langfuse.prompt`, which
+ * @mastra/langfuse turns into the observation's prompt link (ADR-0012).
+ * `input` and `output(result)` become the generation's input and output.
+ * Returns the result and where the generation is, so scores can target it.
  */
 export async function withGeneration<T extends GenerationResult>(
   tracing: TracingContext | undefined,
-  options: { name: string; model: string },
+  options: GenerationOptions<T>,
   call: () => Promise<T>,
-): Promise<T> {
+): Promise<Generated<T>> {
   const span = safely(() =>
     tracing?.currentSpan?.createChildSpan({
       type: SpanType.MODEL_INFERENCE,
       name: options.name,
-      metadata: { promptVersion: options.name, requestedModel: options.model },
+      ...(options.input === undefined ? {} : { input: options.input }),
+      metadata: {
+        promptVersion: options.name,
+        requestedModel: options.model,
+        ...(options.prompt
+          ? {
+              langfuse: {
+                prompt: {
+                  name: options.prompt.name,
+                  version: options.prompt.version,
+                },
+              },
+            }
+          : {}),
+      },
     }),
   );
   let result: T;
@@ -76,8 +123,13 @@ export async function withGeneration<T extends GenerationResult>(
     );
     throw error;
   }
+  const output = options.output
+    ? safely(() => options.output?.(result))
+    : undefined;
   safely(() =>
     span?.end({
+      // Mastra types a model span's output as a model answer; any JSON object exports.
+      ...(output === undefined ? {} : { output: output as never }),
       attributes: {
         responseModel: result.modelId,
         usage: {
@@ -91,7 +143,12 @@ export async function withGeneration<T extends GenerationResult>(
       },
     }),
   );
-  return result;
+  const generation = safely(() =>
+    span?.isValid
+      ? { traceId: span.traceId, observationId: span.id }
+      : undefined,
+  );
+  return { result, generation };
 }
 
 /** Merges metadata into the trace (the workflow run's root span). */
