@@ -1,5 +1,6 @@
 import type { LanguageModel } from "ai";
 import {
+  type ExtractionOptions,
   type ExtractionResult,
   extractWithModel,
 } from "./extract-with-model.js";
@@ -44,10 +45,12 @@ export function assertSupported(document: Document): void {
  * The document goes to the model as a `file` part with its media type
  * unchanged, so the provider decides whether to send it as a file or an image.
  * Unsupported or empty documents are rejected before any model call.
+ * `options.instructions` replaces the prompt text (see ExtractionOptions).
  */
 export async function extractInvoiceFromDocument(
   document: Document,
   model: LanguageModel,
+  options: ExtractionOptions = {},
 ): Promise<ExtractionResult> {
   assertSupported(document);
 
@@ -57,7 +60,10 @@ export async function extractInvoiceFromDocument(
         {
           role: "user",
           content: [
-            { type: "text", text: EXTRACT_DOCUMENT_INSTRUCTIONS },
+            {
+              type: "text",
+              text: options.instructions ?? EXTRACT_DOCUMENT_INSTRUCTIONS,
+            },
             {
               type: "file",
               mediaType: document.mediaType,

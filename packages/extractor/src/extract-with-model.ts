@@ -17,6 +17,15 @@ export interface ExtractionResult {
   latencyMs: number;
 }
 
+/**
+ * Per-call options of the extraction entry points. `instructions` replaces the
+ * prompt text defined in code, e.g. with the same version served by the
+ * prompt registry; the prompt version reported stays the code's.
+ */
+export interface ExtractionOptions {
+  instructions?: string;
+}
+
 /** What the model is asked: optional instructions plus the conversation. */
 export interface ExtractionPrompt {
   /** Sent as the AI SDK `instructions` (system prompt); `messages` may not hold system messages. */

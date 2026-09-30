@@ -1,3 +1,5 @@
+import { type PromptDefinition, promptId } from "./definition.js";
+
 /**
  * Prompt v2 for extracting an invoice from a document (PDF, scan or photo).
  *
@@ -6,8 +8,6 @@
  *   invoices print it as "-264,36 €". Our contract stores it as a positive amount.
  * - Tax IDs kept a prefix ("NIF ...") or the address printed next to them.
  */
-export const EXTRACT_DOCUMENT_PROMPT_VERSION = "extract-document-v2";
-
 export const EXTRACT_DOCUMENT_INSTRUCTIONS = `You extract the Spanish invoice in the attached document into structured data.
 
 Rules:
@@ -21,3 +21,14 @@ Rules:
 - Currency is always "EUR".
 - Tax IDs contain only the identifier (NIF, NIE or CIF, e.g. "B12345674"): drop labels such as "NIF:" or "CIF", and any address or name printed next to them.
 - If a field is not present or not legible, omit it when optional; never guess a tax ID.`;
+
+export const EXTRACT_DOCUMENT_PROMPT: PromptDefinition = {
+  name: "extract-document",
+  version: 2,
+  text: EXTRACT_DOCUMENT_INSTRUCTIONS,
+};
+
+/** Our id for this version ("extract-document-v2"), as stored with invoices and in eval reports. */
+export const EXTRACT_DOCUMENT_PROMPT_VERSION = promptId(
+  EXTRACT_DOCUMENT_PROMPT,
+);

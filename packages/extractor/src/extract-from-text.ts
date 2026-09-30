@@ -1,5 +1,6 @@
 import type { LanguageModel } from "ai";
 import {
+  type ExtractionOptions,
   type ExtractionResult,
   extractWithModel,
 } from "./extract-with-model.js";
@@ -13,15 +14,17 @@ import {
  *
  * The model is injected, so production passes a real provider and tests pass
  * a mock. The output is converted and validated against InvoiceSchema (shape only); business
- * rules are checked later by @invariant/rules.
+ * rules are checked later by @invariant/rules. `options.instructions` replaces
+ * the prompt text (see ExtractionOptions).
  */
 export function extractInvoiceFromText(
   text: string,
   model: LanguageModel,
+  options: ExtractionOptions = {},
 ): Promise<ExtractionResult> {
   return extractWithModel(
     {
-      instructions: EXTRACT_TEXT_INSTRUCTIONS,
+      instructions: options.instructions ?? EXTRACT_TEXT_INSTRUCTIONS,
       messages: [{ role: "user", content: text }],
     },
     model,
