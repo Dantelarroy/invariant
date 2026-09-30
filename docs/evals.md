@@ -94,10 +94,12 @@ Every other field stays at 100 % on both sides. Report: `synth-gpt-5-mini-202609
 
 ### The question for a wrong printed total
 
-`fixtures/text/invoice-002-wrong-total.txt` prints base 85,00 €, VAT 17,85 € and total 112,85 € (base + VAT is 102,85 €). `pnpm extract:text fixtures/text/invoice-002-wrong-total.txt` answered `↺ already processed (document 46560e82-95c9-4d39-a6c2-436ba80d9206)`: the same file was processed before this change, and idempotency (by SHA-256) stops a second run, so no repair or question was produced by that command.
+`fixtures/text/invoice-002-wrong-total.txt` prints base 85,00 €, VAT 17,85 € and total 112,85 € (base + VAT is 102,85 €). The document itself is inconsistent, so repair cannot fix it and must not recompute the total. Because the fixture was already processed before this change (idempotency by SHA-256), it was run from a copy with a trailing newline added, through the full workflow with gpt-5-mini (2026-09-30):
 
-Verifying the values printed on the fixture gives one error, `total` ("Total is 112,85 € but base + VAT − withholding is 102,85 €."), and the question the workflow asks for it is:
+```
+⏸ needs review · run 4837d0d7-59ec-40d0-83e8-74a96021aec5
+  - Total is 112,85 € but base + VAT − withholding is 102,85 €.
+  El total impreso es 112,85 € pero base + IVA − retención da 102,85 €. ¿El total del documento es 112,85 €?
+```
 
-> El total impreso es 112,85 € pero base + IVA − retención da 102,85 €. ¿El total del documento es 112,85 €?
-
-That question comes from `buildReviewQuestion` on those values, not from a model run. To see the full path with a real model, process the fixture as a new document, for example after rejecting its earlier run (`pnpm review <run-id> reject` makes a document retryable) or from a copy with one byte changed.
+The repair ran once, the printed total was kept as printed, and the run paused with the concrete question instead of the old generic one.
