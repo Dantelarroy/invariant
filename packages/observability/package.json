@@ -7,7 +7,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "obs:report": "tsx src/cli/report.ts"
   },
   "dependencies": {
     "@langfuse/otel": "5.11.1",

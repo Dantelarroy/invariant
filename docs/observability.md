@@ -33,3 +33,64 @@ Idle, measured with `docker stats --no-stream` on 2026-09-30, with the Langfuse 
 
 - The web app runs out of a 512 MB V8 heap during its first start, so it gets 1024 MB; the worker keeps 512 MB.
 - ClickHouse is capped at 1 GB of server memory, with a small mark cache and no system log tables (`infra/langfuse/clickhouse/low-memory.xml`).
+
+## Turn tracing on
+
+Tracing is off unless `LANGFUSE_BASE_URL` is set. Add it to `.env`, or pass it for one command:
+
+```sh
+LANGFUSE_BASE_URL=http://127.0.0.1:3000 pnpm extract:text fixtures/text/invoice-001.txt
+LANGFUSE_BASE_URL=http://127.0.0.1:3000 pnpm eval:extract --dataset data/synth-erp --limit 50
+```
+
+- The keys default to the local-only ones; set `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` to use others.
+- Workflow runs (`extract:text`, `review`) go to the `pipeline` environment, eval runs to `eval`.
+- A workflow trace has a span per step, a generation per model call (named after the prompt version, with model, tokens, cost and latency), the document id, model and prompt version as metadata, and a branch as metadata and tag: `accepted`, `repaired`, `needs_review`, `failed`, `rejected` or `duplicate`.
+- A resumed review is a nested run inside the same trace, with its own branch. The report takes the branch of the last run.
+- An eval trace is named after the document id. Its input is the file name and media type, never the document. Its metadata holds the dataset, model, prompt version, exact match and rule verdict.
+- If Langfuse is down, runs behave the same; the command only waits a few seconds at exit while the export gives up.
+
+## Cost and latency report
+
+```sh
+LANGFUSE_BASE_URL=http://127.0.0.1:3000 pnpm obs:report --since 2026-09-30T07:25:15Z --env eval
+```
+
+- It reads observations through `GET /api/public/v2/observations` (the v1 traces endpoint is disabled on Langfuse v4) and rebuilds the traces locally.
+- It prints the trace count, the total cost Langfuse computed from model and tokens, and nearest-rank p50/p95 trace latency per model, per prompt version and per branch.
+- Ingestion is asynchronous, so it reads until the trace count stops changing and prints how many reads it took.
+- `--since` defaults to 24 hours ago; `--env` defaults to `eval`.
+
+### Day 11 run (2026-09-30, partial)
+
+The planned run was 50 FacturaScripts PDFs with gpt-5-mini. It was stopped after 12 documents because the Windows host ran out of memory (1 GB free of 7.8 GB with WSL at 5 GB); the containers themselves stayed healthy. The 12th document finished, but its spans were still buffered when the process was killed, so 11 traces reached Langfuse:
+
+```text
+environment eval · since 2026-09-30T07:25:15.000Z · 2 reads
+traces        11
+model calls   11
+total cost    $0.0341
+
+model                  traces  calls     cost       p50       p95
+gpt-5-mini-2025-08-07      11     11  $0.0341  10362 ms  30819 ms
+
+prompt version       traces  calls     cost       p50       p95
+extract-document-v2      11     11  $0.0341  10362 ms  30819 ms
+
+branch  traces  calls     cost       p50       p95
+(none)      11     11  $0.0341  10362 ms  30819 ms
+```
+
+Every one of the 11 was an exact match. Cost per document was about $0.003.
+
+## From a `needs_review` trace to its cause
+
+This walkthrough follows the `invoice-002-wrong-total` fixture, run with tracing on. It was checked through the public API, which returns the same objects the UI shows.
+
+1. **Find the trace.** In *Tracing*, filter environment `pipeline` and tag `needs_review`. The trace `process-document` has metadata `branch: needs_review`, the `documentId`, `model: gpt-5-mini`, `promptVersion: extract-text-v1` and the file name.
+2. **Read the steps.** The tree shows `workflow_step ingest → extract → verify → repair → human-review`. `repair` took 64 s, most of the 72 s run; `extract` took 8 s.
+3. **Read the question.** The output of `workflow_step human-review` is the review request: the `total` rule failed (`printedCents: 11285`, `expectedCents: 10285`) and the question is *"El total impreso es 112,85 € pero base + IVA − retención da 102,85 €. ¿El total del documento es 112,85 €?"*.
+4. **Check the model calls.** Under `extract` and `repair` are the generations with the model the provider answered with (`gpt-5-mini-2025-08-07`), tokens and cost. The repair did not remove the error: the invoice itself prints a wrong total, and the repair prompt copies what is printed (ADR-0010).
+5. **See the decision.** After `pnpm review <run-id> approve`, the same trace has a nested `process-document` run with `human-review → persist` and `branch: accepted`.
+
+This trace was recorded before generations were exported with their model and tokens, so in it they show as plain spans named `model_generation gpt-5-mini-2025-08-07` without cost. Traces recorded now show a generation named `extract-text-v1` or `repair-v1` with model, tokens and cost.

@@ -9,6 +9,14 @@ export {
 } from "./eval.js";
 export { createObservability, observabilityWith } from "./mastra.js";
 export {
+  formatReport,
+  nearestRank,
+  type Report,
+  type ReportGroup,
+  type ReportObservation,
+  summarizeObservations,
+} from "./report.js";
+export {
   type Env,
   type LangfuseSettings,
   LOCAL_PUBLIC_KEY,
