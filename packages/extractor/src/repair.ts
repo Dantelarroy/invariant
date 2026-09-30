@@ -1,6 +1,7 @@
 import type { LanguageModel, TextPart } from "ai";
 import { assertSupported, type Document } from "./extract-from-document.js";
 import {
+  type ExtractionOptions,
   type ExtractionResult,
   extractWithModel,
 } from "./extract-with-model.js";
@@ -29,11 +30,14 @@ export interface RepairIssue {
  *
  * Throws when `issues` holds no error: repairing a valid extraction is a
  * programming error, and the caller decides whether a repair is due.
+ * `options.instructions` replaces the repair prompt text; the failed checks
+ * and the extraction rules are still appended.
  */
 export async function repairInvoice(
   source: RepairSource,
   issues: readonly RepairIssue[],
   model: LanguageModel,
+  options: ExtractionOptions = {},
 ): Promise<ExtractionResult> {
   const errors = issues
     .filter((issue) => issue.severity === "error")
@@ -49,7 +53,7 @@ export async function repairInvoice(
       : EXTRACT_DOCUMENT_INSTRUCTIONS;
   const instructions: TextPart = {
     type: "text",
-    text: `${REPAIR_INSTRUCTIONS}\n\n${formatFailedChecks(errors)}\n\n${extractionRules}`,
+    text: `${options.instructions ?? REPAIR_INSTRUCTIONS}\n\n${formatFailedChecks(errors)}\n\n${extractionRules}`,
   };
 
   return extractWithModel(

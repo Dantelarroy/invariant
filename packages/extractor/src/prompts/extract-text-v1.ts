@@ -1,9 +1,9 @@
+import { type PromptDefinition, promptId } from "./definition.js";
+
 /**
  * Prompt v1 for extracting an invoice from plain text.
- * Versioned in code for now; moves to Langfuse prompt management on day 12.
+ * Registered in Langfuse prompt management as "extract-text" version 1 (ADR-0012).
  */
-export const EXTRACT_TEXT_PROMPT_VERSION = "extract-text-v1";
-
 export const EXTRACT_TEXT_INSTRUCTIONS = `You extract Spanish invoices into structured data.
 
 Rules:
@@ -13,3 +13,12 @@ Rules:
 - Dates use ISO format YYYY-MM-DD.
 - Currency is always "EUR".
 - If a field is not present, omit it when optional; never guess a tax ID.`;
+
+export const EXTRACT_TEXT_PROMPT: PromptDefinition = {
+  name: "extract-text",
+  version: 1,
+  text: EXTRACT_TEXT_INSTRUCTIONS,
+};
+
+/** Our id for this version ("extract-text-v1"), as stored with invoices and in eval reports. */
+export const EXTRACT_TEXT_PROMPT_VERSION = promptId(EXTRACT_TEXT_PROMPT);
