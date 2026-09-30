@@ -7,3 +7,13 @@ export {
 export { extractInvoiceFromText } from "./extract-from-text.js";
 export type { ExtractionResult } from "./extract-with-model.js";
 export { EXTRACT_DOCUMENT_PROMPT_VERSION } from "./prompts/extract-document-v2.js";
+export {
+  formatFailedChecks,
+  REPAIR_INSTRUCTIONS,
+  REPAIR_PROMPT_VERSION,
+} from "./prompts/repair-v1.js";
+export {
+  type RepairIssue,
+  type RepairSource,
+  repairInvoice,
+} from "./repair.js";
