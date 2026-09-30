@@ -45,7 +45,7 @@ describe("withGeneration", () => {
     run.end();
     await exporter.flush();
 
-    expect(returned).toBe(result);
+    expect(returned.result).toBe(result);
     const [generation] = exporter.getSpansByType(SpanType.MODEL_INFERENCE);
     expect(generation?.name).toBe("extract-text-v1");
     expect(generation?.parentSpanId).toBe(step.id);
@@ -59,6 +59,56 @@ describe("withGeneration", () => {
       promptVersion: "extract-text-v1",
       requestedModel: "gpt-5-mini",
     });
+  });
+
+  it("records the prompt link, the input and the output, and returns the generation's ids", async () => {
+    const { exporter, run, step, tracingContext } = workflowStep();
+
+    const returned = await withGeneration(
+      tracingContext,
+      {
+        name: "extract-text-v1",
+        model: "gpt-5-mini",
+        prompt: { name: "extract-text", version: 1 },
+        input: { promptVersion: "extract-text-v1", text: "FACTURA F-1" },
+        output: (r) => r.invoice,
+      },
+      async () => result,
+    );
+    step.end();
+    run.end();
+    await exporter.flush();
+
+    const [generation] = exporter.getSpansByType(SpanType.MODEL_INFERENCE);
+    expect(generation?.input).toEqual({
+      promptVersion: "extract-text-v1",
+      text: "FACTURA F-1",
+    });
+    expect(generation?.output).toEqual({ totalCents: 1210 });
+    // @mastra/langfuse turns this into the observation's prompt link.
+    expect(generation?.metadata?.langfuse).toEqual({
+      prompt: { name: "extract-text", version: 1 },
+    });
+    expect(returned.generation).toEqual({
+      traceId: run.traceId,
+      observationId: generation?.id,
+    });
+  });
+
+  it("has no prompt link without a registry prompt", async () => {
+    const { exporter, run, step, tracingContext } = workflowStep();
+
+    await withGeneration(
+      tracingContext,
+      { name: "extract-text-v1", model: "m" },
+      async () => result,
+    );
+    step.end();
+    run.end();
+    await exporter.flush();
+
+    const [generation] = exporter.getSpansByType(SpanType.MODEL_INFERENCE);
+    expect(generation?.metadata?.langfuse).toBeUndefined();
   });
 
   it("ends the generation with the error and rethrows the original error", async () => {
@@ -90,7 +140,7 @@ describe("withGeneration", () => {
         { name: "extract-text-v1", model: "m" },
         async () => result,
       ),
-    ).toBe(result);
+    ).toEqual({ result, generation: undefined });
   });
 });
 

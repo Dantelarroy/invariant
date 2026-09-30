@@ -8,6 +8,7 @@ const meta = {
   model: "gpt-5-mini",
   promptVersion: "extract-document-v2",
   repairPromptVersion: "repair-v1",
+  prompts: { extract: { name: "extract-document", version: 2 } },
 };
 const item = {
   id: "erp-fs-000001",
@@ -15,6 +16,7 @@ const item = {
   mediaType: "application/pdf",
 };
 const extraction = {
+  invoice: { number: "F-1", totalCents: 1210 },
   modelId: "gpt-5-mini-2025-08-07",
   promptVersion: "extract-document-v2",
   usage: { inputTokens: 1500, outputTokens: 900 },
@@ -89,6 +91,20 @@ describe("createEvalTracer", () => {
         output: 900,
       }),
     });
+    // Generations carry the prompt link (when the registry served it), input and output.
+    expect(generations[0]?.attributes).toMatchObject({
+      "langfuse.observation.prompt.name": "extract-document",
+      "langfuse.observation.prompt.version": 2,
+      "langfuse.observation.input": JSON.stringify({
+        promptVersion: "extract-document-v2",
+        file: "erp-fs-000001.pdf",
+        mediaType: "application/pdf",
+      }),
+      "langfuse.observation.output": JSON.stringify(extraction.invoice),
+    });
+    expect(
+      generations[1]?.attributes["langfuse.observation.prompt.name"],
+    ).toBeUndefined();
     // The input names the file; the document itself never leaves the machine.
     expect(root?.attributes["langfuse.observation.input"]).toBe(
       JSON.stringify({

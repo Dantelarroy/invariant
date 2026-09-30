@@ -1,4 +1,5 @@
 import type { Db } from "@invariant/db";
+import type { PromptResolver } from "@invariant/observability";
 import { Mastra } from "@mastra/core";
 import type { ObservabilityEntrypoint } from "@mastra/core/observability";
 import { PostgresStore } from "@mastra/pg";
@@ -15,13 +16,15 @@ import {
 /**
  * Mastra keeps workflow snapshots (the state of paused runs) in the same
  * Postgres, in its own "mastra" schema so its tables never mix with ours.
- * With `observability` (see @invariant/observability), every run is traced.
+ * With `observability` (see @invariant/observability), every run is traced;
+ * `resolvePrompt` links its generations to the prompt registry (ADR-0012).
  */
 export function createInvariantMastra(deps: {
   db: Db;
   model: LanguageModel;
   databaseUrl: string;
   observability?: ObservabilityEntrypoint | undefined;
+  resolvePrompt?: PromptResolver | undefined;
 }) {
   const storage = new PostgresStore({
     id: "invariant-workflows",

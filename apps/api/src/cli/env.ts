@@ -2,7 +2,10 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { openai } from "@ai-sdk/openai";
 import { createDb } from "@invariant/db";
-import { createObservability } from "@invariant/observability";
+import {
+  createObservability,
+  createPromptResolver,
+} from "@invariant/observability";
 import { formatMoney } from "@invariant/schema";
 import { createInvariantMastra, type RunResult } from "../mastra.js";
 
@@ -30,6 +33,8 @@ export function createCliContext() {
     observability: createObservability(process.env, {
       environment: "pipeline",
     }),
+    // Pinned prompt versions from the Langfuse registry, or the local text (ADR-0012).
+    resolvePrompt: createPromptResolver(process.env),
   });
   return {
     mastra,

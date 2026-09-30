@@ -10,6 +10,7 @@ import {
 import {
   createObservability,
   observabilityWith,
+  type PromptResolver,
 } from "@invariant/observability";
 import { verifyInvoice } from "@invariant/rules";
 import { type Invoice, InvoiceSchema } from "@invariant/schema";
@@ -236,6 +237,12 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
   });
 
   describe("tracing", () => {
+    /** A registry that serves every prompt version the code asks for. */
+    const registry: PromptResolver = async (prompt) => ({
+      text: prompt.text,
+      link: { name: prompt.name, version: prompt.version },
+    });
+
     /** A traced Mastra instance whose spans are exported to memory. */
     function tracedSetup(...jsons: unknown[]) {
       const exporter = new TestExporter();
@@ -244,6 +251,7 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
         model: mockModelAnswering(...jsons),
         databaseUrl: url,
         observability: observabilityWith([exporter]),
+        resolvePrompt: registry,
       });
       openStores.push(instance.close);
       return { mastra: instance.mastra, exporter };
@@ -271,11 +279,9 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
     it("traces an accepted run: six steps, one extraction generation, branch accepted", async () => {
       const { mastra, exporter } = tracedSetup(modelOutputFor(invoice));
 
+      const text = `traced ${randomUUID()}`;
       const result = track(
-        await processDocument(mastra, {
-          text: `traced ${randomUUID()}`,
-          filename: "invoice.txt",
-        }),
+        await processDocument(mastra, { text, filename: "invoice.txt" }),
       );
 
       expect(result.kind).toBe("accepted");
@@ -293,6 +299,15 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
         responseModel: "mock-model-id",
         usage: { inputTokens: 10, outputTokens: 10 },
       });
+      // Linked to its registry prompt, with the source text in and the invoice out.
+      expect(generations[0]?.metadata?.langfuse).toEqual({
+        prompt: { name: "extract-text", version: 1 },
+      });
+      expect(generations[0]?.input).toEqual({
+        promptVersion: "extract-text-v1",
+        text,
+      });
+      expect(generations[0]?.output).toEqual(invoice);
       expect(root.metadata).toMatchObject({
         branch: "accepted",
         documentId: result.documentId,
@@ -309,17 +324,22 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
         modelOutputFor(invoice),
       );
 
-      track(
-        await processDocument(mastra, {
-          text: `traced repair ${randomUUID()}`,
-        }),
-      );
+      const text = `traced repair ${randomUUID()}`;
+      track(await processDocument(mastra, { text }));
 
       const { root, generations } = await lastTrace(exporter);
       expect(generations.map((g) => g.name)).toEqual([
         "extract-text-v1",
         "repair-v1",
       ]);
+      expect(generations[1]?.metadata?.langfuse).toEqual({
+        prompt: { name: "repair", version: 1 },
+      });
+      expect(generations[1]?.input).toEqual({
+        promptVersion: "repair-v1",
+        text,
+      });
+      expect(generations[1]?.output).toEqual(invoice);
       expect(root.metadata).toMatchObject({
         branch: "repaired",
         promptVersion: "repair-v1",

@@ -8,13 +8,16 @@ import {
   setDocumentStatus,
 } from "@invariant/db";
 import {
+  EXTRACT_TEXT_PROMPT,
   EXTRACT_TEXT_PROMPT_VERSION,
   extractInvoiceFromText,
+  REPAIR_PROMPT,
   REPAIR_PROMPT_VERSION,
   repairInvoice,
   shouldUseRepair,
 } from "@invariant/extractor";
 import {
+  type PromptResolver,
   setBranch,
   setStepOutput,
   setTraceMetadata,
@@ -101,19 +104,29 @@ const ReviewedSchema = ExtractedSchema.extend({
 const errorCount = (issues: readonly { severity: string }[]) =>
   issues.filter((issue) => issue.severity === "error").length;
 
+/** Without a registry, every prompt is the local text, unlinked. */
+const localPrompts: PromptResolver = async (prompt) => ({
+  text: prompt.text,
+  link: undefined,
+});
+
 /**
  * ingest → extract → verify → repair → human-review → persist.
  * Dependencies are injected so tests can pass a mock model and a test database.
  *
- * When tracing is on (ADR-0011), each model call is a generation span and the
+ * When tracing is on (ADR-0011), each model call is a generation span, linked
+ * to its registry prompt and carrying its input and output (ADR-0012), and the
  * step that ends the run sets its branch on the trace. With tracing off, every
  * tracing call is a no-op.
  */
 export function createProcessDocumentWorkflow(deps: {
   db: Db;
   model: LanguageModel;
+  /** Resolves the pinned prompt versions (see @invariant/observability). */
+  resolvePrompt?: PromptResolver | undefined;
 }) {
   const { db, model } = deps;
+  const resolvePrompt = deps.resolvePrompt ?? localPrompts;
   const modelId = typeof model === "string" ? model : model.modelId;
 
   // Idempotency: the same content (SHA-256) is processed only once,
@@ -152,10 +165,25 @@ export function createProcessDocumentWorkflow(deps: {
     outputSchema: ExtractedSchema,
     execute: async ({ inputData, bail, tracingContext }) => {
       try {
-        const { invoice, promptVersion } = await withGeneration(
+        const prompt = await resolvePrompt(EXTRACT_TEXT_PROMPT);
+        const {
+          result: { invoice, promptVersion },
+        } = await withGeneration(
           tracingContext,
-          { name: EXTRACT_TEXT_PROMPT_VERSION, model: modelId },
-          () => extractInvoiceFromText(inputData.text, model),
+          {
+            name: EXTRACT_TEXT_PROMPT_VERSION,
+            model: modelId,
+            prompt: prompt.link,
+            input: {
+              promptVersion: EXTRACT_TEXT_PROMPT_VERSION,
+              text: inputData.text,
+            },
+            output: (result) => result.invoice,
+          },
+          () =>
+            extractInvoiceFromText(inputData.text, model, {
+              instructions: prompt.text,
+            }),
         );
         setTraceMetadata(tracingContext, { promptVersion });
         return { documentId: inputData.documentId, invoice, promptVersion };
@@ -200,11 +228,21 @@ export function createProcessDocumentWorkflow(deps: {
       const { text } = WorkflowInputSchema.parse(getInitData());
       let repaired: Awaited<ReturnType<typeof repairInvoice>>;
       try {
-        repaired = await withGeneration(
+        const prompt = await resolvePrompt(REPAIR_PROMPT);
+        ({ result: repaired } = await withGeneration(
           tracingContext,
-          { name: REPAIR_PROMPT_VERSION, model: modelId },
-          () => repairInvoice({ text }, inputData.issues, model),
-        );
+          {
+            name: REPAIR_PROMPT_VERSION,
+            model: modelId,
+            prompt: prompt.link,
+            input: { promptVersion: REPAIR_PROMPT_VERSION, text },
+            output: (result) => result.invoice,
+          },
+          () =>
+            repairInvoice({ text }, inputData.issues, model, {
+              instructions: prompt.text,
+            }),
+        ));
       } catch {
         // A failed repair call is not a failed document: a person still reviews it.
         return original;

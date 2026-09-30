@@ -4,12 +4,17 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { openai } from "@ai-sdk/openai";
 import {
+  EXTRACT_DOCUMENT_PROMPT,
   EXTRACT_DOCUMENT_PROMPT_VERSION,
   extractInvoiceFromDocument,
+  REPAIR_PROMPT,
   REPAIR_PROMPT_VERSION,
   repairInvoice,
 } from "@invariant/extractor";
-import { createEvalTracer } from "@invariant/observability";
+import {
+  createEvalTracer,
+  createPromptResolver,
+} from "@invariant/observability";
 import {
   type DatasetItem,
   type DocumentFormat,
@@ -80,12 +85,20 @@ const documentOf = (item: DatasetItem) => ({
   mediaType: item.mediaType,
 });
 
+// The pinned prompt versions, from the Langfuse registry when it serves them (ADR-0012).
+const resolvePrompt = createPromptResolver(process.env);
+const extractPrompt = await resolvePrompt(EXTRACT_DOCUMENT_PROMPT);
+const repairPrompt = withRepair
+  ? await resolvePrompt(REPAIR_PROMPT)
+  : undefined;
+
 // One trace per document in Langfuse, only when LANGFUSE_BASE_URL is set (ADR-0011).
 const tracer = createEvalTracer(process.env, {
   dataset: values.dataset,
   model: modelId,
   promptVersion: EXTRACT_DOCUMENT_PROMPT_VERSION,
   ...(withRepair ? { repairPromptVersion: REPAIR_PROMPT_VERSION } : {}),
+  prompts: { extract: extractPrompt.link, repair: repairPrompt?.link },
 });
 
 console.log(
@@ -94,14 +107,19 @@ console.log(
 if (tracer) console.log(`tracing to ${process.env.LANGFUSE_BASE_URL}`);
 const documents = await evaluateDocuments(
   items,
-  (item) => extractInvoiceFromDocument(documentOf(item), model),
+  (item) =>
+    extractInvoiceFromDocument(documentOf(item), model, {
+      instructions: extractPrompt.text,
+    }),
   {
     today,
     ...(tracer ? { tracer } : {}),
     ...(withRepair
       ? {
           repair: (item, issues) =>
-            repairInvoice({ document: documentOf(item) }, issues, model),
+            repairInvoice({ document: documentOf(item) }, issues, model, {
+              ...(repairPrompt ? { instructions: repairPrompt.text } : {}),
+            }),
         }
       : {}),
     onResult: (r) => {

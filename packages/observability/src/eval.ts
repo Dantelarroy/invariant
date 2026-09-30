@@ -10,6 +10,7 @@ import {
   BasicTracerProvider,
   type SpanExporter,
 } from "@opentelemetry/sdk-trace-base";
+import type { PromptLink } from "./prompts.js";
 import { type Env, langfuseSettings } from "./settings.js";
 
 /** What an eval run is: set on every trace as metadata. */
@@ -19,6 +20,11 @@ export interface EvalRunMeta {
   model: string;
   promptVersion: string;
   repairPromptVersion?: string;
+  /** The registry prompts the run used, when the registry served them (ADR-0012). */
+  prompts?: {
+    extract?: PromptLink | undefined;
+    repair?: PromptLink | undefined;
+  };
 }
 
 /** A dataset document: only its id, file name and media type are traced. */
@@ -33,6 +39,8 @@ export interface EvalGeneration {
   usage: { inputTokens: number | undefined; outputTokens: number | undefined };
   modelId?: string;
   promptVersion?: string;
+  /** Recorded as the generation's output. */
+  invoice?: unknown;
 }
 
 /** The part of an eval document result that goes on its trace. */
@@ -169,10 +177,15 @@ async function traceGeneration<T extends EvalGeneration>(
     kind === "extract"
       ? meta.promptVersion
       : (meta.repairPromptVersion ?? "repair");
+  const prompt = meta.prompts?.[kind];
   const generation = safely(() =>
     root?.startObservation(
       promptVersion,
-      { model: meta.model, input: { ...input, prompt: promptVersion } },
+      {
+        model: meta.model,
+        input: { promptVersion, ...input },
+        ...(prompt ? { prompt: { ...prompt, isFallback: false } } : {}),
+      },
       { asType: "generation" },
     ),
   );
@@ -203,6 +216,7 @@ async function traceGeneration<T extends EvalGeneration>(
     generation.update({
       model: result.modelId ?? meta.model,
       usageDetails,
+      ...(result.invoice === undefined ? {} : { output: result.invoice }),
       ...(result.promptVersion
         ? { metadata: { promptVersion: result.promptVersion } }
         : {}),
