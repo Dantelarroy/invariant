@@ -223,6 +223,87 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
     ).toBeUndefined();
   });
 
+  describe("resume with a corrected invoice", () => {
+    /** The reviewer's correction: the printed total was really 12,10 €. */
+    const corrected: Invoice = { ...inconsistentInvoice, totalCents: 1210 };
+
+    async function pausedRun(label: string) {
+      const mastra = mastraAnswering(modelOutputFor(inconsistentInvoice));
+      const paused = track(
+        await processDocument(mastra, { text: `${label} ${randomUUID()}` }),
+      );
+      if (paused.kind !== "needs_review") throw new Error(`got ${paused.kind}`);
+      return { mastra, paused };
+    }
+
+    it("persists the corrected invoice and the reviewer when approved with one", async () => {
+      const { paused } = await pausedRun("corrected");
+
+      // After a restart, like a sync run from another process.
+      const resumed = await reviewDocument(
+        mastraAnswering({ unused: true }),
+        paused.runId,
+        { approved: true, reviewer: "dante", invoice: corrected },
+      );
+
+      expect(resumed).toMatchObject({
+        kind: "accepted",
+        reviewedBy: "dante",
+        totalCents: 1210,
+        corrected: true,
+      });
+      const stored = await findInvoiceByDocumentId(db, paused.documentId);
+      expect(stored?.totalCents).toBe(1210);
+      expect(await statusOf(paused.documentId)).toBe("valid");
+    });
+
+    it("persists a correction that still breaks a rule: the golden invoice is as printed", async () => {
+      const { mastra, paused } = await pausedRun("as printed");
+      const asPrinted: Invoice = { ...inconsistentInvoice, number: "F-1b" };
+
+      const resumed = await reviewDocument(mastra, paused.runId, {
+        approved: true,
+        reviewer: "dante",
+        invoice: asPrinted,
+      });
+
+      expect(resumed).toMatchObject({ kind: "accepted", totalCents: 1310 });
+      const stored = await findInvoiceByDocumentId(db, paused.documentId);
+      expect(stored?.number).toBe("F-1b");
+    });
+
+    it("ignores the corrected invoice when the reviewer rejects", async () => {
+      const { mastra, paused } = await pausedRun("reject corrected");
+
+      const result = await reviewDocument(mastra, paused.runId, {
+        approved: false,
+        reviewer: "dante",
+        invoice: corrected,
+      });
+
+      expect(result).toEqual({
+        kind: "rejected",
+        documentId: paused.documentId,
+        reviewedBy: "dante",
+      });
+      expect(
+        await findInvoiceByDocumentId(db, paused.documentId),
+      ).toBeUndefined();
+    });
+
+    it("approving without a correction stores the extraction, not marked corrected", async () => {
+      const { mastra, paused } = await pausedRun("plain approve");
+
+      const result = await reviewDocument(mastra, paused.runId, {
+        approved: true,
+        reviewer: "dante",
+      });
+
+      expect(result).toMatchObject({ kind: "accepted", totalCents: 1310 });
+      expect(result).not.toHaveProperty("corrected");
+    });
+  });
+
   it("retries a previously rejected document instead of treating it as a duplicate", async () => {
     const text = `retry ${randomUUID()}`;
     const failed = track(
