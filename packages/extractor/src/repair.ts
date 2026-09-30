@@ -74,3 +74,15 @@ export async function repairInvoice(
     REPAIR_PROMPT_VERSION,
   );
 }
+
+/**
+ * The selection rule (ADR-0010): use the repaired extraction when it has no
+ * errors, otherwise only when it has fewer errors than the original. A tie
+ * keeps the original, so a repair never changes numbers without evidence.
+ */
+export function shouldUseRepair(
+  originalErrors: number,
+  repairedErrors: number,
+): boolean {
+  return repairedErrors < originalErrors;
+}

@@ -37,7 +37,7 @@ export function printResult(result: RunResult): void {
   switch (result.kind) {
     case "accepted":
       console.log(
-        `✔ accepted invoice ${result.invoiceId} · total ${formatMoney(result.totalCents)} · reviewed by ${result.reviewedBy}`,
+        `✔ accepted invoice ${result.invoiceId} · total ${formatMoney(result.totalCents)} · reviewed by ${result.reviewedBy}${result.repaired ? " · repaired" : ""}`,
       );
       break;
     case "rejected":

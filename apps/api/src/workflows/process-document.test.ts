@@ -1,19 +1,27 @@
 import { randomUUID } from "node:crypto";
 import {
   createDb,
+  createDocument,
   deleteDocuments,
   findDocumentById,
   findInvoiceByDocumentId,
+  setDocumentStatus,
 } from "@invariant/db";
-import type { Invoice } from "@invariant/schema";
+import { verifyInvoice } from "@invariant/rules";
+import { type Invoice, InvoiceSchema } from "@invariant/schema";
+import { Mastra } from "@mastra/core";
+import { createStep, createWorkflow } from "@mastra/core/workflows";
+import { PostgresStore } from "@mastra/pg";
 import { MockLanguageModelV4 } from "ai/test";
 import { afterAll, describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   createInvariantMastra,
   processDocument,
   type RunResult,
   reviewDocument,
 } from "../mastra.js";
+import { HUMAN_REVIEW_STEP_ID } from "./process-document.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -50,24 +58,38 @@ function modelOutputFor(inv: Invoice) {
 /** The printed total is wrong: base + VAT is 12,10 € but the document says 13,10 €. */
 const inconsistentInvoice: Invoice = { ...invoice, totalCents: 1310 };
 
-function mockModelAnswering(json: unknown) {
-  return new MockLanguageModelV4({
-    doGenerate: {
-      content: [{ type: "text", text: JSON.stringify(json) }],
-      finishReason: { unified: "stop", raw: "stop" },
-      usage: {
-        inputTokens: {
-          total: 10,
-          noCache: 10,
-          cacheRead: undefined,
-          cacheWrite: undefined,
-        },
-        outputTokens: { total: 10, text: 10, reasoning: undefined },
+function answer(json: unknown) {
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(json) }],
+    finishReason: { unified: "stop" as const, raw: "stop" },
+    usage: {
+      inputTokens: {
+        total: 10,
+        noCache: 10,
+        cacheRead: undefined,
+        cacheWrite: undefined,
       },
-      warnings: [],
+      outputTokens: { total: 10, text: 10, reasoning: undefined },
     },
+    warnings: [],
+  };
+}
+
+/**
+ * A fake model. With one answer it repeats it on every call; with several it
+ * answers each call with the next one in order (e.g. wrong, then repaired).
+ */
+function mockModelAnswering(...jsons: unknown[]) {
+  return new MockLanguageModelV4({
+    doGenerate: jsons.length === 1 ? answer(jsons[0]) : jsons.map(answer),
   });
 }
+
+/** The supplier's tax id is misread: its CIF control digit should be 4. */
+const misreadTaxIdInvoice: Invoice = {
+  ...invoice,
+  supplier: { name: "Proveedor SL", taxId: "B12345678" },
+};
 
 describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
   const url = databaseUrl as string;
@@ -75,15 +97,16 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
   const createdIds: string[] = [];
   const openStores: (() => Promise<void>)[] = [];
 
-  /** A fresh Mastra instance, as if the process had just started. */
-  function mastraAnswering(json: unknown) {
-    const instance = createInvariantMastra({
-      db,
-      model: mockModelAnswering(json),
-      databaseUrl: url,
-    });
+  /** A fresh Mastra instance, as if the process had just started, and its model. */
+  function setup(...jsons: unknown[]) {
+    const model = mockModelAnswering(...jsons);
+    const instance = createInvariantMastra({ db, model, databaseUrl: url });
     openStores.push(instance.close);
-    return instance.mastra;
+    return { mastra: instance.mastra, model };
+  }
+
+  function mastraAnswering(json: unknown) {
+    return setup(json).mastra;
   }
 
   async function statusOf(documentId: string) {
@@ -102,11 +125,17 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
   });
 
   it("accepts a consistent invoice without asking; a second run is a duplicate", async () => {
-    const mastra = mastraAnswering(modelOutputFor(invoice));
+    const { mastra, model } = setup(modelOutputFor(invoice));
     const text = `invoice ${randomUUID()}`;
 
     const first = track(await processDocument(mastra, { text }));
-    expect(first).toMatchObject({ kind: "accepted", reviewedBy: "rules" });
+    expect(first).toMatchObject({
+      kind: "accepted",
+      reviewedBy: "rules",
+      repaired: false,
+    });
+    // No errors, no repair: the model is called once.
+    expect(model.doGenerateCalls).toHaveLength(1);
     expect(await statusOf(first.documentId)).toBe("valid");
 
     const second = await processDocument(mastra, { text });
@@ -198,5 +227,171 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
 
     expect(retried.kind).toBe("accepted");
     expect(retried.documentId).toBe(failed.documentId);
+  });
+
+  describe("rule-guided repair", () => {
+    async function storedPromptVersion(documentId: string) {
+      return (await findInvoiceByDocumentId(db, documentId))?.promptVersion;
+    }
+
+    it("accepts a repaired invoice without a person and keeps the repair prompt version", async () => {
+      const { mastra, model } = setup(
+        modelOutputFor(misreadTaxIdInvoice),
+        modelOutputFor(invoice),
+      );
+      const text = `misread tax id ${randomUUID()}`;
+
+      const result = track(await processDocument(mastra, { text }));
+
+      expect(result).toMatchObject({
+        kind: "accepted",
+        reviewedBy: "rules",
+        repaired: true,
+      });
+      expect(model.doGenerateCalls).toHaveLength(2);
+      // The repair sees the original text and the violated rule, not the first answer.
+      const repairRequest = JSON.stringify(model.doGenerateCalls[1]?.prompt);
+      expect(repairRequest).toContain(text);
+      expect(repairRequest).toContain("tax id");
+      expect(repairRequest).not.toContain('"role":"assistant"');
+      expect(await storedPromptVersion(result.documentId)).toBe("repair-v1");
+    });
+
+    it("asks a concrete question when the repair still fails, without a third call", async () => {
+      const { mastra, model } = setup(
+        modelOutputFor(inconsistentInvoice),
+        modelOutputFor(inconsistentInvoice),
+        modelOutputFor(invoice),
+      );
+
+      const paused = track(
+        await processDocument(mastra, { text: `still wrong ${randomUUID()}` }),
+      );
+
+      if (paused.kind !== "needs_review") throw new Error(`got ${paused.kind}`);
+      expect(model.doGenerateCalls).toHaveLength(2);
+      expect(paused.issues.map((i) => i.ruleId)).toEqual(["total"]);
+      expect(paused.question).toBe(
+        "El total impreso es 13,10 € pero base + IVA − retención da 12,10 €. ¿El total del documento es 13,10 €?",
+      );
+    });
+
+    it("keeps the original extraction when the repair is worse", async () => {
+      const worse: Invoice = { ...misreadTaxIdInvoice, totalCents: 1310 };
+      const { mastra, model } = setup(
+        modelOutputFor(misreadTaxIdInvoice),
+        modelOutputFor(worse),
+      );
+
+      const paused = track(
+        await processDocument(mastra, { text: `worse ${randomUUID()}` }),
+      );
+
+      if (paused.kind !== "needs_review") throw new Error(`got ${paused.kind}`);
+      expect(model.doGenerateCalls).toHaveLength(2);
+      expect(paused.issues.map((i) => i.ruleId)).toEqual(["tax-ids"]);
+
+      const approved = await reviewDocument(mastra, paused.runId, {
+        approved: true,
+        reviewer: "dante",
+      });
+      expect(approved).toMatchObject({
+        kind: "accepted",
+        reviewedBy: "dante",
+        repaired: false,
+        totalCents: 1210,
+      });
+      expect(await storedPromptVersion(paused.documentId)).toBe(
+        "extract-text-v1",
+      );
+    });
+
+    it("resumes a run suspended before the repair step existed, without repairing it", async () => {
+      // The pre-repair shape: ingest → extract → verify → human-review (suspends).
+      const legacyStep = (id: string, run: () => Promise<object>) =>
+        createStep({
+          id,
+          inputSchema: z.any(),
+          outputSchema: z.any(),
+          execute: async ({ inputData }) => ({
+            ...inputData,
+            ...(await run()),
+          }),
+        });
+      const text = `legacy ${randomUUID()}`;
+      let documentId = "";
+      const legacy = createWorkflow({
+        id: "process-document",
+        inputSchema: z.object({ text: z.string() }),
+        outputSchema: z.any(),
+      })
+        .then(
+          legacyStep("ingest", async () => {
+            const doc = await createDocument(db, {
+              sha256: randomUUID(),
+              source: "upload",
+              filename: null,
+            });
+            documentId = doc.id;
+            await setDocumentStatus(db, doc.id, "processing");
+            return { documentId: doc.id };
+          }),
+        )
+        .then(
+          legacyStep("extract", async () => ({
+            invoice: InvoiceSchema.parse(inconsistentInvoice),
+            promptVersion: "extract-text-v1",
+          })),
+        )
+        .then(
+          legacyStep("verify", async () => ({
+            issues: verifyInvoice(inconsistentInvoice).violations,
+          })),
+        )
+        .then(
+          createStep({
+            id: HUMAN_REVIEW_STEP_ID,
+            inputSchema: z.any(),
+            outputSchema: z.any(),
+            execute: async ({ suspend }) => {
+              await setDocumentStatus(db, documentId, "needs_review");
+              return await suspend({});
+            },
+          }),
+        )
+        .commit();
+      const storage = new PostgresStore({
+        id: "legacy-workflows",
+        connectionString: url,
+        schemaName: "mastra",
+      });
+      openStores.push(() => storage.close());
+      const legacyMastra = new Mastra({
+        storage,
+        logger: false,
+        workflows: { processDocument: legacy },
+      });
+      const legacyRun = await legacyMastra
+        .getWorkflow("processDocument")
+        .createRun();
+      const suspended = await legacyRun.start({ inputData: { text } });
+      expect(suspended.status).toBe("suspended");
+      createdIds.push(documentId);
+
+      const { mastra, model } = setup(modelOutputFor(invoice));
+      const resumed = await reviewDocument(mastra, legacyRun.runId, {
+        approved: true,
+        reviewer: "dante",
+      });
+
+      expect(model.doGenerateCalls).toHaveLength(0);
+      expect(resumed).toMatchObject({
+        kind: "accepted",
+        reviewedBy: "dante",
+        repaired: false,
+        totalCents: 1310,
+      });
+      expect(await storedPromptVersion(documentId)).toBe("extract-text-v1");
+    });
   });
 });
