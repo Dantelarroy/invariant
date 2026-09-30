@@ -21,4 +21,4 @@
 - [x] 4.1 With Langfuse up and part 1 seeded, run `pnpm synth:review --count 12` and process the 12 files through the workflow. Verify that the queue shows 12 pending items with source text, invoice and rule scores (API check, plus a UI screenshot through headless Playwright).
 - [x] 4.2 Hand-off: the author reviews at least 10 items in the Langfuse UI (at least 3 `corrected`). This is a human task; the agent stops here and waits.
 - [x] 4.3 Run `pnpm review:sync`, then `pnpm golden:export`. Verify that the runs are resolved (DB statuses), that `golden.jsonl` has one record per reviewed document, that a second sync resolves nothing, and that the corrected values match what was entered. Record the numbers in `docs/review.md`.
-- [ ] 4.4 Run `pnpm lint && pnpm typecheck && pnpm test && pnpm py:check`, open the PR and confirm that CI is green.
+- [x] 4.4 Run `pnpm lint && pnpm typecheck && pnpm test && pnpm py:check`, open the PR and confirm that CI is green.
