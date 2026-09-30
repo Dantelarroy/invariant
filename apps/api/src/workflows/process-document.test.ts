@@ -9,8 +9,11 @@ import {
 } from "@invariant/db";
 import {
   createObservability,
+  createReviewQueue,
+  type GenerationRef,
   observabilityWith,
   type PromptResolver,
+  type ReviewQueueSink,
   ruleScoreBodies,
   type ScoreSink,
 } from "@invariant/observability";
@@ -504,6 +507,154 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
       expect((await lastTrace(exporter)).root.metadata?.branch).toBe(
         "duplicate",
       );
+    });
+  });
+
+  describe("review queue", () => {
+    /** A traced instance with a queue that records what it is asked to queue. */
+    function queuedSetup(
+      reviewQueue: ReviewQueueSink | undefined,
+      ...jsons: unknown[]
+    ) {
+      const exporter = new TestExporter();
+      const instance = createInvariantMastra({
+        db,
+        model: mockModelAnswering(...jsons),
+        databaseUrl: url,
+        observability: observabilityWith([exporter]),
+        reviewQueue,
+      });
+      openStores.push(instance.close);
+      return { ...instance, exporter };
+    }
+
+    function recordingQueue() {
+      const queued: GenerationRef[] = [];
+      const queue: ReviewQueueSink = {
+        enqueue: (target) => {
+          queued.push(target);
+        },
+        flush: async () => {},
+      };
+      return { queue, queued };
+    }
+
+    it("queues the extraction of each paused document once, not accepted ones and not on resume", async () => {
+      const { queue, queued } = recordingQueue();
+      const { mastra, exporter } = queuedSetup(
+        queue,
+        modelOutputFor(inconsistentInvoice),
+      );
+
+      const paused = track(
+        await processDocument(mastra, { text: `queued ${randomUUID()}` }),
+      );
+      if (paused.kind !== "needs_review") throw new Error(`got ${paused.kind}`);
+      await exporter.flush();
+      const [extraction] = exporter.getSpansByType(SpanType.MODEL_INFERENCE);
+      expect(queued).toEqual([
+        { traceId: extraction?.traceId, observationId: extraction?.id },
+      ]);
+      const root = exporter.getSpansByType(SpanType.WORKFLOW_RUN).at(-1);
+      expect(root?.metadata).toMatchObject({
+        runId: paused.runId,
+        documentId: paused.documentId,
+        queued: true,
+      });
+
+      await reviewDocument(mastra, paused.runId, {
+        approved: true,
+        reviewer: "dante",
+      });
+      const accepted = queuedSetup(queue, modelOutputFor(invoice));
+      track(
+        await processDocument(accepted.mastra, {
+          text: `not queued ${randomUUID()}`,
+        }),
+      );
+      expect(queued).toHaveLength(1);
+    });
+
+    it("queues the repair generation when the repair was chosen and still fails", async () => {
+      const { queue, queued } = recordingQueue();
+      const bothWrong: Invoice = { ...misreadTaxIdInvoice, totalCents: 1310 };
+      const { mastra, exporter } = queuedSetup(
+        queue,
+        modelOutputFor(bothWrong),
+        modelOutputFor(inconsistentInvoice),
+      );
+
+      const paused = track(
+        await processDocument(mastra, {
+          text: `queued repair ${randomUUID()}`,
+        }),
+      );
+
+      expect(paused.kind).toBe("needs_review");
+      await exporter.flush();
+      const repair = exporter
+        .getSpansByType(SpanType.MODEL_INFERENCE)
+        .find((span) => span.name === "repair-v1");
+      expect(queued.map((q) => q.observationId)).toEqual([repair?.id]);
+    });
+
+    it("still pauses when Langfuse does not answer, and only logs it", async () => {
+      const warnings: string[] = [];
+      const { mastra, close } = queuedSetup(
+        // Nothing listens on port 9.
+        createReviewQueue(
+          { LANGFUSE_BASE_URL: "http://127.0.0.1:9" },
+          { warn: (message) => warnings.push(message) },
+        ),
+        modelOutputFor(inconsistentInvoice),
+      );
+
+      const paused = track(
+        await processDocument(mastra, { text: `queue down ${randomUUID()}` }),
+      );
+
+      expect(paused.kind).toBe("needs_review");
+      expect(await statusOf(paused.documentId)).toBe("needs_review");
+      await close();
+      expect(warnings).toEqual([expect.stringContaining("not queued")]);
+    }, 30_000);
+
+    it("still pauses when the queue itself throws", async () => {
+      const { mastra } = queuedSetup(
+        {
+          enqueue: () => {
+            throw new Error("broken queue");
+          },
+          flush: async () => {},
+        },
+        modelOutputFor(inconsistentInvoice),
+      );
+
+      const paused = track(
+        await processDocument(mastra, { text: `queue throws ${randomUUID()}` }),
+      );
+
+      expect(paused.kind).toBe("needs_review");
+    });
+
+    it("queues nothing without tracing", async () => {
+      const { queue, queued } = recordingQueue();
+      const instance = createInvariantMastra({
+        db,
+        model: mockModelAnswering(modelOutputFor(inconsistentInvoice)),
+        databaseUrl: url,
+        reviewQueue: queue,
+      });
+      openStores.push(instance.close);
+
+      const paused = track(
+        await processDocument(instance.mastra, {
+          text: `untraced queue ${randomUUID()}`,
+        }),
+      );
+
+      expect(paused.kind).toBe("needs_review");
+      expect(queued).toEqual([]);
     });
   });
 

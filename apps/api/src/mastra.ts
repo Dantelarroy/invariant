@@ -1,5 +1,9 @@
 import type { Db } from "@invariant/db";
-import type { PromptResolver, ScoreSink } from "@invariant/observability";
+import type {
+  PromptResolver,
+  ReviewQueueSink,
+  ScoreSink,
+} from "@invariant/observability";
 import { Mastra } from "@mastra/core";
 import type { ObservabilityEntrypoint } from "@mastra/core/observability";
 import { PostgresStore } from "@mastra/pg";
@@ -18,7 +22,8 @@ import {
  * Postgres, in its own "mastra" schema so its tables never mix with ours.
  * With `observability` (see @invariant/observability), every run is traced;
  * `resolvePrompt` links its generations to the prompt registry and `scores`
- * records their rule results (ADR-0012).
+ * records their rule results (ADR-0012); `reviewQueue` sends paused runs to
+ * the Langfuse review queue (ADR-0013).
  */
 export function createInvariantMastra(deps: {
   db: Db;
@@ -27,6 +32,7 @@ export function createInvariantMastra(deps: {
   observability?: ObservabilityEntrypoint | undefined;
   resolvePrompt?: PromptResolver | undefined;
   scores?: ScoreSink | undefined;
+  reviewQueue?: ReviewQueueSink | undefined;
 }) {
   const storage = new PostgresStore({
     id: "invariant-workflows",
@@ -39,9 +45,11 @@ export function createInvariantMastra(deps: {
     workflows: { processDocument: createProcessDocumentWorkflow(deps) },
     ...(deps.observability ? { observability: deps.observability } : {}),
   });
-  // Pending scores first, then shutdown() flushes traces and closes the storage.
+  // Pending scores and queue items first, then shutdown() flushes traces and
+  // closes the storage.
   const close = async () => {
     await deps.scores?.flush();
+    await deps.reviewQueue?.flush();
     await mastra.shutdown();
   };
   return { mastra, close };
@@ -94,7 +102,11 @@ export async function processDocument(
     await run.start({
       inputData: input,
       tracingOptions: {
-        metadata: input.filename ? { filename: input.filename } : {},
+        // The run id maps a queued generation back to its paused run (ADR-0013).
+        metadata: {
+          runId: run.runId,
+          ...(input.filename ? { filename: input.filename } : {}),
+        },
         tags: PIPELINE_TAGS,
       },
     }),

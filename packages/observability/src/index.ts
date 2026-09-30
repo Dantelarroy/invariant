@@ -25,6 +25,24 @@ export {
   summarizeObservations,
 } from "./report.js";
 export {
+  CORRECTION_SCORE_NAME,
+  type CompletedReview,
+  type CorrectionScore,
+  createReviewQueue,
+  enqueueForReview,
+  ensureReviewQueue,
+  type LangfuseClient,
+  listCompletedReviews,
+  pickCorrection,
+  REVIEW_QUEUE_NAME,
+  type ReviewedGeneration,
+  type ReviewQueueIds,
+  type ReviewQueueSink,
+  VERDICT_CONFIG_NAME,
+  VERDICTS,
+  type Verdict,
+} from "./review.js";
+export {
   createScoreSink,
   ruleScoreBodies,
   type ScoreBody,
