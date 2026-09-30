@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@invariant/extractor": "workspace:*",
+    "@invariant/rules": "workspace:*",
     "@langfuse/client": "5.11.1",
     "@langfuse/otel": "5.11.1",
     "@langfuse/tracing": "5.11.1",
@@ -25,6 +26,7 @@
     "@opentelemetry/sdk-trace-base": "^2.10.0"
   },
   "devDependencies": {
+    "@invariant/schema": "workspace:*",
     "tsx": "^4.23.15"
   }
 }

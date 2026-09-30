@@ -1,4 +1,5 @@
 import { basename } from "node:path";
+import type { VerificationResult } from "@invariant/rules";
 import { LangfuseSpanProcessor } from "@langfuse/otel";
 import {
   LangfuseOtelSpanAttributes,
@@ -11,6 +12,7 @@ import {
   type SpanExporter,
 } from "@opentelemetry/sdk-trace-base";
 import type { PromptLink } from "./prompts.js";
+import { createScoreSink, type ScoreSink } from "./scores.js";
 import { type Env, langfuseSettings } from "./settings.js";
 
 /** What an eval run is: set on every trace as metadata. */
@@ -58,14 +60,19 @@ export interface EvalDocumentTrace {
     kind: "extract" | "repair",
     call: () => Promise<T>,
   ): Promise<T>;
+  /** Scores the last generation of that kind with its rule results (ADR-0012). */
+  verified(kind: "extract" | "repair", verification: VerificationResult): void;
   end(outcome: EvalOutcome): void;
 }
 
 export interface EvalTracer {
   startDocument(item: EvalItem): EvalDocumentTrace;
-  /** Sends every pending trace; call it before the process exits. */
+  /** Sends every pending trace and score; call it before the process exits. */
   shutdown(): Promise<void>;
 }
+
+/** What scoring needs from a generation: its observation and trace ids. */
+type Observed = { id: string; traceId: string };
 
 const TRACE_METADATA = LangfuseOtelSpanAttributes.TRACE_METADATA;
 
@@ -84,15 +91,19 @@ function safely<T>(fn: () => T): T | undefined {
  * generation per model call. Returns undefined when tracing is off.
  *
  * The trace input is the file name and media type, never the document bytes.
- * `options.exporter` replaces the Langfuse HTTP exporter (tests).
+ * Each verified generation is scored with its rule results, like the
+ * workflow's. `options.exporter` and `options.scores` replace the Langfuse
+ * HTTP exporter and score sink (tests).
  */
 export function createEvalTracer(
   env: Env,
   meta: EvalRunMeta,
-  options: { exporter?: SpanExporter } = {},
+  options: { exporter?: SpanExporter; scores?: ScoreSink } = {},
 ): EvalTracer | undefined {
   const settings = langfuseSettings(env);
   if (!settings) return undefined;
+  const scores =
+    options.scores ?? createScoreSink(env, { environment: "eval" });
   const processor = new LangfuseSpanProcessor({
     ...settings,
     environment: "eval",
@@ -119,9 +130,25 @@ export function createEvalTracer(
         });
         return span;
       });
+      const generations: Partial<Record<"extract" | "repair", Observed>> = {};
       return {
-        generation: (kind, call) =>
-          traceGeneration(root, kind, call, { meta, input }),
+        async generation(kind, call) {
+          return traceGeneration(root, kind, call, {
+            meta,
+            input,
+            started: (generation) => {
+              generations[kind] = generation;
+            },
+          });
+        },
+        verified(kind, verification) {
+          const generation = generations[kind];
+          if (!generation) return;
+          scores?.ruleScores(
+            { traceId: generation.traceId, observationId: generation.id },
+            verification,
+          );
+        },
         end(outcome) {
           safely(() => {
             if (!root) return;
@@ -156,6 +183,7 @@ export function createEvalTracer(
     },
     async shutdown() {
       try {
+        await scores?.flush();
         await provider.shutdown();
       } catch (error) {
         console.warn("[observability] could not send eval traces:", error);
@@ -170,7 +198,11 @@ async function traceGeneration<T extends EvalGeneration>(
   root: LangfuseSpan | undefined,
   kind: "extract" | "repair",
   call: () => Promise<T>,
-  context: { meta: EvalRunMeta; input: { file: string; mediaType: string } },
+  context: {
+    meta: EvalRunMeta;
+    input: { file: string; mediaType: string };
+    started: (generation: Observed) => void;
+  },
 ): Promise<T> {
   const { meta, input } = context;
   const promptVersion =
@@ -189,6 +221,7 @@ async function traceGeneration<T extends EvalGeneration>(
       { asType: "generation" },
     ),
   );
+  if (generation) context.started(generation);
   let result: T;
   try {
     result = await call();

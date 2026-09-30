@@ -11,8 +11,10 @@ import {
   createObservability,
   observabilityWith,
   type PromptResolver,
+  ruleScoreBodies,
+  type ScoreSink,
 } from "@invariant/observability";
-import { verifyInvoice } from "@invariant/rules";
+import { type VerificationResult, verifyInvoice } from "@invariant/rules";
 import { type Invoice, InvoiceSchema } from "@invariant/schema";
 import { Mastra } from "@mastra/core";
 import { SpanType } from "@mastra/core/observability";
@@ -303,9 +305,10 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
       expect(generations[0]?.metadata?.langfuse).toEqual({
         prompt: { name: "extract-text", version: 1 },
       });
+      // `source`, not `text`: the OTel export would turn a `text` key into a chat message.
       expect(generations[0]?.input).toEqual({
         promptVersion: "extract-text-v1",
-        text,
+        source: text,
       });
       expect(generations[0]?.output).toEqual(invoice);
       expect(root.metadata).toMatchObject({
@@ -337,7 +340,7 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
       });
       expect(generations[1]?.input).toEqual({
         promptVersion: "repair-v1",
-        text,
+        source: text,
       });
       expect(generations[1]?.output).toEqual(invoice);
       expect(root.metadata).toMatchObject({
@@ -420,6 +423,133 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
       expect((await lastTrace(exporter)).root.metadata?.branch).toBe(
         "duplicate",
       );
+    });
+  });
+
+  describe("rule scores", () => {
+    type Scored = {
+      target: { traceId: string; observationId: string };
+      verification: VerificationResult;
+    };
+
+    /** A traced instance whose score sink records what it is asked to score. */
+    function scoredSetup(...jsons: unknown[]) {
+      const exporter = new TestExporter();
+      const scored: Scored[] = [];
+      let flushes = 0;
+      const scores: ScoreSink = {
+        ruleScores: (target, verification) => {
+          scored.push({ target, verification });
+        },
+        flush: async () => {
+          flushes += 1;
+        },
+      };
+      const instance = createInvariantMastra({
+        db,
+        model: mockModelAnswering(...jsons),
+        databaseUrl: url,
+        observability: observabilityWith([exporter]),
+        scores,
+      });
+      return { ...instance, exporter, scored, flushes: () => flushes };
+    }
+
+    /** The score values Langfuse would get, by name. */
+    function valuesOf({ target, verification }: Scored) {
+      return Object.fromEntries(
+        ruleScoreBodies(target, verification, "test").map((score) => [
+          score.name,
+          score.value,
+        ]),
+      );
+    }
+
+    async function generationsOf(exporter: TestExporter) {
+      await exporter.flush();
+      return exporter.getSpansByType(SpanType.MODEL_INFERENCE);
+    }
+
+    it("scores a wrong total on the extraction: rule.total and rules.valid are false", async () => {
+      const { mastra, close, exporter, scored, flushes } = scoredSetup(
+        modelOutputFor(inconsistentInvoice),
+      );
+
+      track(
+        await processDocument(mastra, { text: `scored total ${randomUUID()}` }),
+      );
+      await close();
+
+      const [extraction] = await generationsOf(exporter);
+      expect(scored[0]?.target).toEqual({
+        traceId: extraction?.traceId,
+        observationId: extraction?.id,
+      });
+      expect(valuesOf(scored[0] as Scored)).toEqual({
+        "rule.line-amount": 1,
+        "rule.lines-sum": 1,
+        "rule.vat-rate": 1,
+        "rule.vat-amount": 1,
+        "rule.total": 0,
+        "rule.tax-ids": 1,
+        "rule.issue-date": 1,
+        "rules.score": 6 / 7,
+        "rules.valid": 0,
+      });
+      // close() waits for the scores still in flight.
+      expect(flushes()).toBe(1);
+    });
+
+    it("scores both generations of a repaired document, each with its own result", async () => {
+      const { mastra, close, exporter, scored } = scoredSetup(
+        modelOutputFor(misreadTaxIdInvoice),
+        modelOutputFor(invoice),
+      );
+      openStores.push(close);
+
+      const result = track(
+        await processDocument(mastra, {
+          text: `scored repair ${randomUUID()}`,
+        }),
+      );
+
+      expect(result).toMatchObject({ kind: "accepted", repaired: true });
+      const generations = await generationsOf(exporter);
+      expect(scored.map((s) => s.target.observationId)).toEqual(
+        generations.map((g) => g.id),
+      );
+      expect(valuesOf(scored[0] as Scored)).toMatchObject({
+        "rule.tax-ids": 0,
+        "rules.valid": 0,
+      });
+      expect(valuesOf(scored[1] as Scored)).toMatchObject({
+        "rule.tax-ids": 1,
+        "rules.valid": 1,
+      });
+    });
+
+    it("sends no score without tracing", async () => {
+      const scored: Scored[] = [];
+      const instance = createInvariantMastra({
+        db,
+        model: mockModelAnswering(modelOutputFor(inconsistentInvoice)),
+        databaseUrl: url,
+        scores: {
+          ruleScores: (target, verification) => {
+            scored.push({ target, verification });
+          },
+          flush: async () => {},
+        },
+      });
+      openStores.push(instance.close);
+
+      track(
+        await processDocument(instance.mastra, {
+          text: `untraced ${randomUUID()}`,
+        }),
+      );
+
+      expect(scored).toEqual([]);
     });
   });
 

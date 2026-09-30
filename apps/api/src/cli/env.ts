@@ -5,6 +5,7 @@ import { createDb } from "@invariant/db";
 import {
   createObservability,
   createPromptResolver,
+  createScoreSink,
 } from "@invariant/observability";
 import { formatMoney } from "@invariant/schema";
 import { createInvariantMastra, type RunResult } from "../mastra.js";
@@ -15,7 +16,7 @@ if (existsSync(envPath)) process.loadEnvFile(envPath);
 /**
  * Wires the real dependencies (Postgres + OpenAI) for command-line use.
  * Traces go to Langfuse only when LANGFUSE_BASE_URL is set (ADR-0011);
- * `close()` flushes them before the process exits.
+ * `close()` flushes them, and the rule scores, before the process exits.
  */
 export function createCliContext() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -35,6 +36,8 @@ export function createCliContext() {
     }),
     // Pinned prompt versions from the Langfuse registry, or the local text (ADR-0012).
     resolvePrompt: createPromptResolver(process.env),
+    // Rule results as scores of each verified generation (ADR-0012).
+    scores: createScoreSink(process.env, { environment: "pipeline" }),
   });
   return {
     mastra,

@@ -1,6 +1,6 @@
 # Observability
 
-Every processed or evaluated document can leave one trace in a local, self-hosted [Langfuse](https://langfuse.com) v4: its steps, model calls, tokens, cost and latency. Decisions are in [ADR-0011](adr/0011-observability.md).
+Every processed or evaluated document can leave one trace in a local, self-hosted [Langfuse](https://langfuse.com) v4: its steps, model calls, tokens, cost and latency. Decisions are in [ADR-0011](adr/0011-observability.md) and [ADR-0012](adr/0012-prompt-registry-and-rule-scores.md).
 
 ## Start and stop
 
@@ -49,6 +49,40 @@ LANGFUSE_BASE_URL=http://127.0.0.1:3000 pnpm eval:extract --dataset data/synth-e
 - A resumed review is a nested run inside the same trace, with its own branch. The report takes the branch of the last run.
 - An eval trace is named after the document id. Its input is the file name and media type, never the document. Its metadata holds the dataset, model, prompt version, exact match and rule verdict.
 - If Langfuse is down, runs behave the same; the command only waits a few seconds at exit while the export gives up.
+
+## Prompts and scores
+
+Generations are linked to their prompt version and scored with the business rules ([ADR-0012](adr/0012-prompt-registry-and-rule-scores.md)).
+
+### Seed the prompt registry
+
+Run once after `pnpm langfuse:up`, and again after adding a prompt version:
+
+```sh
+pnpm prompts:seed
+```
+
+- Every prompt version in `packages/extractor/src/prompts/` is registered under its family: `extract-text` v1, `extract-document` v1 and v2, `repair` v1. Our `extract-document-v2` is Langfuse `extract-document` version 2.
+- It is idempotent: identical versions are skipped, so a second run creates nothing.
+- If a registered version has other text (someone edited it in the UI), it names the prompt and version and writes nothing. A changed prompt is a new version in git.
+- The code decides the text. Runs ask Langfuse for the version the code pins; if Langfuse is down or the version is missing, they use the local text and the generation is not linked. Labels such as `production` are not used.
+
+### What a generation shows
+
+- **Prompt:** the family and version, linked to the prompt page, where Langfuse groups its generations, cost and latency.
+- **Input:** `{ promptVersion, source }` for text documents (`source` is the text; a `text` key would be turned into a chat message by the OpenTelemetry export), `{ promptVersion, file, mediaType }` in evals. Never document bytes.
+- **Output:** the extracted invoice, amounts in integer cents.
+- **Scores**, on each extraction and repair generation, in workflow and eval traces:
+
+| Score | Type | Value |
+|---|---|---|
+| `rule.<id>` (7: `line-amount`, `lines-sum`, `vat-rate`, `vat-amount`, `total`, `tax-ids`, `issue-date`) | boolean | true when the rule held. When it failed, the comment holds its messages and the metadata its severity and details (the compared amounts). |
+| `rules.score` | numeric | Share of rules that held, 0 to 1. |
+| `rules.valid` | boolean | True when no error rule failed. |
+
+- Score ids are `<observation id>-<name>`: sending them again updates them.
+- In *Scores* or a trace's *Scores* tab, filter by `rule.total = false` to find every generation that misread (or faithfully copied) a wrong total.
+- Scores are sent in the background; a Langfuse outage only logs a warning.
 
 ## Cost and latency report
 

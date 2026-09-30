@@ -1,5 +1,9 @@
 import { shouldUseRepair } from "@invariant/extractor";
-import { type Violation, verifyInvoice } from "@invariant/rules";
+import {
+  type VerificationResult,
+  type Violation,
+  verifyInvoice,
+} from "@invariant/rules";
 import type { Invoice } from "@invariant/schema";
 import type { DatasetItem } from "./dataset.js";
 import { scoreExtraction } from "./score.js";
@@ -30,7 +34,8 @@ export type Repair = (
 
 /**
  * Optional tracing hooks (ADR-0011): one trace per document, with a
- * generation per model call. The runner behaves the same without them.
+ * generation per model call, scored with its rule results (ADR-0012). The
+ * runner behaves the same without them.
  */
 export interface DocumentTracer {
   startDocument(item: DatasetItem): DocumentTrace;
@@ -41,6 +46,8 @@ export interface DocumentTrace {
     kind: "extract" | "repair",
     call: () => Promise<T>,
   ): Promise<T>;
+  /** The rule results of the last generation of that kind. */
+  verified(kind: "extract" | "repair", verification: VerificationResult): void;
   end(result: DocumentResult): void;
 }
 
@@ -86,12 +93,14 @@ export async function evaluateDocuments(
     let result: DocumentResult;
     try {
       const { invoice, usage } = await traced("extract", () => extract(item));
+      trace?.verified("extract", verifyInvoice(invoice, { today }));
       const score = scoreExtraction(item.invoice, invoice, { today });
       result = { id: item.id, score, usage, latencyMs: elapsed() };
       if (options.repair) {
         result = await repairOnce(item, invoice, result, options.repair, {
           today,
           elapsed,
+          ...(trace ? { trace } : {}),
           traced,
         });
       }
@@ -131,7 +140,13 @@ async function repairOnce(
     today,
     elapsed,
     traced,
-  }: { today: string; elapsed: () => number; traced: Traced },
+    trace,
+  }: {
+    today: string;
+    elapsed: () => number;
+    traced: Traced;
+    trace?: DocumentTrace;
+  },
 ): Promise<DocumentResult> {
   const before = {
     scoreBefore: first.score,
@@ -144,9 +159,9 @@ async function repairOnce(
   }
   try {
     const repaired = await traced("repair", () => repair(item, violations));
-    const repairedErrors = errorCount(
-      verifyInvoice(repaired.invoice, { today }).violations,
-    );
+    const verification = verifyInvoice(repaired.invoice, { today });
+    trace?.verified("repair", verification);
+    const repairedErrors = errorCount(verification.violations);
     const used = shouldUseRepair(errorCount(violations), repairedErrors);
     return {
       ...first,

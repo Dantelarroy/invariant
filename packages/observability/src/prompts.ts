@@ -87,7 +87,7 @@ export function createPromptResolver(
       });
       if (served.isFallback || served.version !== prompt.version) {
         warn(
-          `prompt ${id} is not in the registry (run pnpm prompts:seed); using the local text`,
+          `prompt ${id} was not served by the registry (not seeded, or Langfuse unreachable); using the local text`,
         );
         return local(prompt);
       }

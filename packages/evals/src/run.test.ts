@@ -189,6 +189,9 @@ describe("evaluateDocuments with a tracer", () => {
               throw error;
             }
           },
+          verified: (kind, verification) => {
+            calls.push(`${kind} verified ${doc.id} ${verification.valid}`);
+          },
           end: (result) => {
             calls.push(`end ${doc.id}`);
             ended.push(result);
@@ -199,7 +202,7 @@ describe("evaluateDocuments with a tracer", () => {
     return { tracer, calls, ended };
   }
 
-  it("opens one trace per document, with a generation per model call, and ends it with the result", async () => {
+  it("opens one trace per document, with a verified generation per model call, and ends it with the result", async () => {
     const { tracer, calls, ended } = fakeTracer();
 
     const results = await evaluateDocuments(
@@ -221,10 +224,13 @@ describe("evaluateDocuments with a tracer", () => {
     expect(calls).toEqual([
       "start ok",
       "extract ok",
+      "extract verified ok true",
       "end ok",
       "start fixed",
       "extract fixed",
+      "extract verified fixed false",
       "repair fixed",
+      "repair verified fixed true",
       "end fixed",
       "start broken",
       "extract broken",
