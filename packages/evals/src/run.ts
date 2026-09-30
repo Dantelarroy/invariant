@@ -5,11 +5,19 @@ import type { DatasetItem } from "./dataset.js";
 import { scoreExtraction } from "./score.js";
 import type { DocumentResult, Usage } from "./summarize.js";
 
-/** What an extractor returns for one document; it throws when extraction fails. */
-export type Extract = (item: DatasetItem) => Promise<{
+/**
+ * What one model call returns. `modelId` and `promptVersion` are optional and
+ * only feed tracing; the extractor's ExtractionResult carries both.
+ */
+export type Extraction = {
   invoice: Invoice;
   usage: Usage;
-}>;
+  modelId?: string;
+  promptVersion?: string;
+};
+
+/** What an extractor returns for one document; it throws when extraction fails. */
+export type Extract = (item: DatasetItem) => Promise<Extraction>;
 
 /**
  * Extracts the document once more given the first extraction's violations
@@ -18,7 +26,28 @@ export type Extract = (item: DatasetItem) => Promise<{
 export type Repair = (
   item: DatasetItem,
   issues: readonly Violation[],
-) => Promise<{ invoice: Invoice; usage: Usage }>;
+) => Promise<Extraction>;
+
+/**
+ * Optional tracing hooks (ADR-0011): one trace per document, with a
+ * generation per model call. The runner behaves the same without them.
+ */
+export interface DocumentTracer {
+  startDocument(item: DatasetItem): DocumentTrace;
+}
+export interface DocumentTrace {
+  /** Runs one model call inside a generation; must return or rethrow what `call` does. */
+  generation<T extends Extraction>(
+    kind: "extract" | "repair",
+    call: () => Promise<T>,
+  ): Promise<T>;
+  end(result: DocumentResult): void;
+}
+
+type Traced = <T extends Extraction>(
+  kind: "extract" | "repair",
+  call: () => Promise<T>,
+) => Promise<T>;
 
 const errorCount = (violations: readonly Violation[]) =>
   violations.filter((v) => v.severity === "error").length;
@@ -43,6 +72,7 @@ export async function evaluateDocuments(
     today: string;
     onResult?: (result: DocumentResult) => void;
     repair?: Repair;
+    tracer?: DocumentTracer;
   },
 ): Promise<DocumentResult[]> {
   const { today } = options;
@@ -50,15 +80,19 @@ export async function evaluateDocuments(
   for (const item of items) {
     const started = performance.now();
     const elapsed = () => Math.round(performance.now() - started);
+    const trace = options.tracer?.startDocument(item);
+    const traced: Traced = (kind, call) =>
+      trace ? trace.generation(kind, call) : call();
     let result: DocumentResult;
     try {
-      const { invoice, usage } = await extract(item);
+      const { invoice, usage } = await traced("extract", () => extract(item));
       const score = scoreExtraction(item.invoice, invoice, { today });
       result = { id: item.id, score, usage, latencyMs: elapsed() };
       if (options.repair) {
         result = await repairOnce(item, invoice, result, options.repair, {
           today,
           elapsed,
+          traced,
         });
       }
     } catch (error) {
@@ -82,6 +116,7 @@ export async function evaluateDocuments(
       }
     }
     results.push(result);
+    trace?.end(result);
     options.onResult?.(result);
   }
   return results;
@@ -92,7 +127,11 @@ async function repairOnce(
   invoice: Invoice,
   first: DocumentResult,
   repair: Repair,
-  { today, elapsed }: { today: string; elapsed: () => number },
+  {
+    today,
+    elapsed,
+    traced,
+  }: { today: string; elapsed: () => number; traced: Traced },
 ): Promise<DocumentResult> {
   const before = {
     scoreBefore: first.score,
@@ -104,7 +143,7 @@ async function repairOnce(
     return { ...first, repair: { attempted: false, used: false, ...before } };
   }
   try {
-    const repaired = await repair(item, violations);
+    const repaired = await traced("repair", () => repair(item, violations));
     const repairedErrors = errorCount(
       verifyInvoice(repaired.invoice, { today }).violations,
     );

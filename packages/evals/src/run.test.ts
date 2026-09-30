@@ -1,8 +1,12 @@
 import type { Invoice } from "@invariant/schema";
 import { describe, expect, it } from "vitest";
 import type { DatasetItem } from "./dataset.js";
-import { evaluateDocuments } from "./run.js";
-import { summarize, summarizeRepair } from "./summarize.js";
+import { type DocumentTracer, evaluateDocuments } from "./run.js";
+import {
+  type DocumentResult,
+  summarize,
+  summarizeRepair,
+} from "./summarize.js";
 
 const invoice: Invoice = {
   number: "F-1",
@@ -158,5 +162,97 @@ describe("evaluateDocuments with repair", () => {
     );
 
     expect(result).not.toHaveProperty("repair");
+  });
+});
+
+describe("evaluateDocuments with a tracer", () => {
+  const usage = { inputTokens: 100, outputTokens: 10 };
+  const misreadTaxId: Invoice = {
+    ...invoice,
+    supplier: { name: "Proveedor SL", taxId: "B12345678" },
+  };
+
+  /** Records what the runner asks the tracer to do, in order. */
+  function fakeTracer() {
+    const calls: string[] = [];
+    const ended: DocumentResult[] = [];
+    const tracer: DocumentTracer = {
+      startDocument: (doc) => {
+        calls.push(`start ${doc.id}`);
+        return {
+          generation: async (kind, call) => {
+            calls.push(`${kind} ${doc.id}`);
+            try {
+              return await call();
+            } catch (error) {
+              calls.push(`${kind} failed ${doc.id}`);
+              throw error;
+            }
+          },
+          end: (result) => {
+            calls.push(`end ${doc.id}`);
+            ended.push(result);
+          },
+        };
+      },
+    };
+    return { tracer, calls, ended };
+  }
+
+  it("opens one trace per document, with a generation per model call, and ends it with the result", async () => {
+    const { tracer, calls, ended } = fakeTracer();
+
+    const results = await evaluateDocuments(
+      [item("ok"), item("fixed"), item("broken")],
+      async (doc) => {
+        if (doc.id === "broken") throw new Error("model timed out");
+        return {
+          invoice: doc.id === "ok" ? invoice : misreadTaxId,
+          usage,
+        };
+      },
+      {
+        today: "2026-09-29",
+        tracer,
+        repair: async () => ({ invoice, usage }),
+      },
+    );
+
+    expect(calls).toEqual([
+      "start ok",
+      "extract ok",
+      "end ok",
+      "start fixed",
+      "extract fixed",
+      "repair fixed",
+      "end fixed",
+      "start broken",
+      "extract broken",
+      "extract failed broken",
+      "end broken",
+    ]);
+    expect(ended).toEqual(results);
+  });
+
+  it("returns the same results with and without a tracer", async () => {
+    const extract = async () => ({ invoice: misreadTaxId, usage });
+    const repair = async () => ({ invoice, usage });
+    const withoutLatency = (results: DocumentResult[]) =>
+      results.map(({ latencyMs, repair, ...rest }) => ({
+        ...rest,
+        repair: repair && { ...repair, latencyMsBefore: 0 },
+      }));
+
+    const plain = await evaluateDocuments([item("a")], extract, {
+      today: "2026-09-29",
+      repair,
+    });
+    const traced = await evaluateDocuments([item("a")], extract, {
+      today: "2026-09-29",
+      repair,
+      tracer: fakeTracer().tracer,
+    });
+
+    expect(withoutLatency(traced)).toEqual(withoutLatency(plain));
   });
 });

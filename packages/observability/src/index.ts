@@ -1,3 +1,12 @@
+export {
+  createEvalTracer,
+  type EvalDocumentTrace,
+  type EvalGeneration,
+  type EvalItem,
+  type EvalOutcome,
+  type EvalRunMeta,
+  type EvalTracer,
+} from "./eval.js";
 export { createObservability, observabilityWith } from "./mastra.js";
 export {
   type Env,
@@ -11,6 +20,7 @@ export {
   type Branch,
   type GenerationResult,
   setBranch,
+  setStepOutput,
   setTraceMetadata,
   withGeneration,
 } from "./spans.js";

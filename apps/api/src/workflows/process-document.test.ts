@@ -7,10 +7,16 @@ import {
   findInvoiceByDocumentId,
   setDocumentStatus,
 } from "@invariant/db";
+import {
+  createObservability,
+  observabilityWith,
+} from "@invariant/observability";
 import { verifyInvoice } from "@invariant/rules";
 import { type Invoice, InvoiceSchema } from "@invariant/schema";
 import { Mastra } from "@mastra/core";
+import { SpanType } from "@mastra/core/observability";
 import { createStep, createWorkflow } from "@mastra/core/workflows";
+import { TestExporter } from "@mastra/observability";
 import { PostgresStore } from "@mastra/pg";
 import { MockLanguageModelV4 } from "ai/test";
 import { afterAll, describe, expect, it } from "vitest";
@@ -227,6 +233,174 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
 
     expect(retried.kind).toBe("accepted");
     expect(retried.documentId).toBe(failed.documentId);
+  });
+
+  describe("tracing", () => {
+    /** A traced Mastra instance whose spans are exported to memory. */
+    function tracedSetup(...jsons: unknown[]) {
+      const exporter = new TestExporter();
+      const instance = createInvariantMastra({
+        db,
+        model: mockModelAnswering(...jsons),
+        databaseUrl: url,
+        observability: observabilityWith([exporter]),
+      });
+      openStores.push(instance.close);
+      return { mastra: instance.mastra, exporter };
+    }
+
+    /** The last workflow run in the exporter: its steps, generations and root. */
+    async function lastTrace(exporter: TestExporter) {
+      await exporter.flush();
+      const root = exporter.getSpansByType(SpanType.WORKFLOW_RUN).at(-1);
+      if (!root) throw new Error("no workflow run was traced");
+      const spans = exporter
+        .getAllSpans()
+        .filter((span) => span.traceId === root.traceId);
+      const inRun = (type: SpanType) =>
+        spans.filter(
+          (span) => span.type === type && span.startTime >= root.startTime,
+        );
+      return {
+        root,
+        steps: inRun(SpanType.WORKFLOW_STEP),
+        generations: inRun(SpanType.MODEL_INFERENCE),
+      };
+    }
+
+    it("traces an accepted run: six steps, one extraction generation, branch accepted", async () => {
+      const { mastra, exporter } = tracedSetup(modelOutputFor(invoice));
+
+      const result = track(
+        await processDocument(mastra, {
+          text: `traced ${randomUUID()}`,
+          filename: "invoice.txt",
+        }),
+      );
+
+      expect(result.kind).toBe("accepted");
+      const { root, steps, generations } = await lastTrace(exporter);
+      expect(steps.map((step) => step.entityId)).toEqual([
+        "ingest",
+        "extract",
+        "verify",
+        "repair",
+        "human-review",
+        "persist",
+      ]);
+      expect(generations.map((g) => g.name)).toEqual(["extract-text-v1"]);
+      expect(generations[0]?.attributes).toMatchObject({
+        responseModel: "mock-model-id",
+        usage: { inputTokens: 10, outputTokens: 10 },
+      });
+      expect(root.metadata).toMatchObject({
+        branch: "accepted",
+        documentId: result.documentId,
+        filename: "invoice.txt",
+        model: "mock-model-id",
+        promptVersion: "extract-text-v1",
+      });
+      expect(root.tags).toEqual(["pipeline", "accepted"]);
+    });
+
+    it("traces a repaired run with two generations and branch repaired", async () => {
+      const { mastra, exporter } = tracedSetup(
+        modelOutputFor(misreadTaxIdInvoice),
+        modelOutputFor(invoice),
+      );
+
+      track(
+        await processDocument(mastra, {
+          text: `traced repair ${randomUUID()}`,
+        }),
+      );
+
+      const { root, generations } = await lastTrace(exporter);
+      expect(generations.map((g) => g.name)).toEqual([
+        "extract-text-v1",
+        "repair-v1",
+      ]);
+      expect(root.metadata).toMatchObject({
+        branch: "repaired",
+        promptVersion: "repair-v1",
+      });
+      expect(root.tags).toEqual(["pipeline", "repaired"]);
+    });
+
+    it("traces a paused run as needs_review with the question, and its resumption with its own branch", async () => {
+      const { mastra, exporter } = tracedSetup(
+        modelOutputFor(inconsistentInvoice),
+      );
+
+      const paused = track(
+        await processDocument(mastra, { text: `traced pause ${randomUUID()}` }),
+      );
+      if (paused.kind !== "needs_review") throw new Error(`got ${paused.kind}`);
+
+      const pausedTrace = await lastTrace(exporter);
+      expect(pausedTrace.root.metadata?.branch).toBe("needs_review");
+      expect(pausedTrace.root.tags).toEqual(["pipeline", "needs_review"]);
+      const review = pausedTrace.steps.find(
+        (step) => step.entityId === "human-review",
+      );
+      expect(JSON.stringify(review?.output)).toContain(paused.question);
+
+      await reviewDocument(mastra, paused.runId, {
+        approved: false,
+        reviewer: "dante",
+      });
+
+      const resumed = await lastTrace(exporter);
+      expect(resumed.root.metadata).toMatchObject({
+        branch: "rejected",
+        documentId: paused.documentId,
+      });
+      expect(resumed.root.tags).toContain("rejected");
+      expect(resumed.root.tags).not.toContain("needs_review");
+    });
+
+    it("never fails a run when Langfuse does not answer", async () => {
+      const instance = createInvariantMastra({
+        db,
+        model: mockModelAnswering(modelOutputFor(invoice)),
+        databaseUrl: url,
+        // Nothing listens on port 9: every export fails.
+        observability: createObservability(
+          { LANGFUSE_BASE_URL: "http://127.0.0.1:9" },
+          { environment: "test" },
+        ),
+      });
+
+      const result = track(
+        await processDocument(instance.mastra, {
+          text: `langfuse down ${randomUUID()}`,
+        }),
+      );
+
+      expect(result.kind).toBe("accepted");
+      await expect(instance.close()).resolves.not.toThrow();
+      // Closing waits for the failed export (a few seconds), then gives up quietly.
+    }, 30_000);
+
+    it("traces a failed extraction as failed and a second run as duplicate", async () => {
+      const failing = tracedSetup({ nonsense: true });
+      track(
+        await processDocument(failing.mastra, {
+          text: `traced failure ${randomUUID()}`,
+        }),
+      );
+      expect((await lastTrace(failing.exporter)).root.metadata?.branch).toBe(
+        "failed",
+      );
+
+      const { mastra, exporter } = tracedSetup(modelOutputFor(invoice));
+      const text = `traced duplicate ${randomUUID()}`;
+      track(await processDocument(mastra, { text }));
+      await processDocument(mastra, { text });
+      expect((await lastTrace(exporter)).root.metadata?.branch).toBe(
+        "duplicate",
+      );
+    });
   });
 
   describe("rule-guided repair", () => {

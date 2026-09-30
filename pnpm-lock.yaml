@@ -41,6 +41,9 @@ importers:
       '@invariant/extractor':
         specifier: workspace:*
         version: link:../../packages/extractor
+      '@invariant/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       '@invariant/rules':
         specifier: workspace:*
         version: link:../../packages/rules
@@ -60,6 +63,9 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
     devDependencies:
+      '@mastra/observability':
+        specifier: 1.18.0
+        version: 1.18.0(@mastra/core@1.69.0(@grpc/grpc-js@1.14.5)(ai@7.0.113(zod@4.6.5))(zod@4.6.5))(zod@4.6.5)
       tsx:
         specifier: ^4.23.15
         version: 4.23.15
@@ -88,6 +94,9 @@ importers:
       '@invariant/extractor':
         specifier: workspace:*
         version: link:../extractor
+      '@invariant/observability':
+        specifier: workspace:*
+        version: link:../observability
       '@invariant/rules':
         specifier: workspace:*
         version: link:../rules

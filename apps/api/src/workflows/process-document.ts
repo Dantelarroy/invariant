@@ -8,10 +8,18 @@ import {
   setDocumentStatus,
 } from "@invariant/db";
 import {
+  EXTRACT_TEXT_PROMPT_VERSION,
   extractInvoiceFromText,
+  REPAIR_PROMPT_VERSION,
   repairInvoice,
   shouldUseRepair,
 } from "@invariant/extractor";
+import {
+  setBranch,
+  setStepOutput,
+  setTraceMetadata,
+  withGeneration,
+} from "@invariant/observability";
 import { verifyInvoice } from "@invariant/rules";
 import { InvoiceSchema } from "@invariant/schema";
 import { createStep, createWorkflow } from "@mastra/core/workflows";
@@ -96,12 +104,17 @@ const errorCount = (issues: readonly { severity: string }[]) =>
 /**
  * ingest → extract → verify → repair → human-review → persist.
  * Dependencies are injected so tests can pass a mock model and a test database.
+ *
+ * When tracing is on (ADR-0011), each model call is a generation span and the
+ * step that ends the run sets its branch on the trace. With tracing off, every
+ * tracing call is a no-op.
  */
 export function createProcessDocumentWorkflow(deps: {
   db: Db;
   model: LanguageModel;
 }) {
   const { db, model } = deps;
+  const modelId = typeof model === "string" ? model : model.modelId;
 
   // Idempotency: the same content (SHA-256) is processed only once,
   // unless it was rejected before, in which case it is retried.
@@ -109,10 +122,15 @@ export function createProcessDocumentWorkflow(deps: {
     id: "ingest",
     inputSchema: WorkflowInputSchema,
     outputSchema: z.object({ documentId: z.string(), text: z.string() }),
-    execute: async ({ inputData, bail }) => {
+    execute: async ({ inputData, bail, tracingContext }) => {
       const sha256 = createHash("sha256").update(inputData.text).digest("hex");
       const existing = await findDocumentBySha256(db, sha256);
       if (existing && existing.status !== "rejected") {
+        setTraceMetadata(tracingContext, {
+          documentId: existing.id,
+          model: modelId,
+        });
+        setBranch(tracingContext, "duplicate");
         return bail({ kind: "duplicate", documentId: existing.id });
       }
       const doc =
@@ -123,6 +141,7 @@ export function createProcessDocumentWorkflow(deps: {
           filename: inputData.filename ?? null,
         }));
       await setDocumentStatus(db, doc.id, "processing");
+      setTraceMetadata(tracingContext, { documentId: doc.id, model: modelId });
       return { documentId: doc.id, text: inputData.text };
     },
   });
@@ -131,15 +150,18 @@ export function createProcessDocumentWorkflow(deps: {
     id: "extract",
     inputSchema: z.object({ documentId: z.string(), text: z.string() }),
     outputSchema: ExtractedSchema,
-    execute: async ({ inputData, bail }) => {
+    execute: async ({ inputData, bail, tracingContext }) => {
       try {
-        const { invoice, promptVersion } = await extractInvoiceFromText(
-          inputData.text,
-          model,
+        const { invoice, promptVersion } = await withGeneration(
+          tracingContext,
+          { name: EXTRACT_TEXT_PROMPT_VERSION, model: modelId },
+          () => extractInvoiceFromText(inputData.text, model),
         );
+        setTraceMetadata(tracingContext, { promptVersion });
         return { documentId: inputData.documentId, invoice, promptVersion };
       } catch (error) {
         await setDocumentStatus(db, inputData.documentId, "rejected");
+        setBranch(tracingContext, "failed");
         return bail({
           kind: "failed",
           documentId: inputData.documentId,
@@ -166,7 +188,7 @@ export function createProcessDocumentWorkflow(deps: {
     id: "repair",
     inputSchema: VerifiedSchema,
     outputSchema: RepairedSchema,
-    execute: async ({ inputData, getInitData }) => {
+    execute: async ({ inputData, getInitData, tracingContext }) => {
       const original = { ...inputData, repaired: false };
       if (errorCount(inputData.issues) === 0) return original;
       // Mastra resumes by step position, so a run suspended before this step existed
@@ -178,7 +200,11 @@ export function createProcessDocumentWorkflow(deps: {
       const { text } = WorkflowInputSchema.parse(getInitData());
       let repaired: Awaited<ReturnType<typeof repairInvoice>>;
       try {
-        repaired = await repairInvoice({ text }, inputData.issues, model);
+        repaired = await withGeneration(
+          tracingContext,
+          { name: REPAIR_PROMPT_VERSION, model: modelId },
+          () => repairInvoice({ text }, inputData.issues, model),
+        );
       } catch {
         // A failed repair call is not a failed document: a person still reviews it.
         return original;
@@ -187,6 +213,9 @@ export function createProcessDocumentWorkflow(deps: {
       if (!shouldUseRepair(errorCount(inputData.issues), errorCount(issues))) {
         return original;
       }
+      setTraceMetadata(tracingContext, {
+        promptVersion: repaired.promptVersion,
+      });
       return {
         documentId: inputData.documentId,
         invoice: repaired.invoice,
@@ -205,7 +234,7 @@ export function createProcessDocumentWorkflow(deps: {
     outputSchema: ReviewedSchema,
     suspendSchema: ReviewRequestSchema,
     resumeSchema: ReviewDecisionSchema,
-    execute: async ({ inputData, resumeData, suspend }) => {
+    execute: async ({ inputData, resumeData, suspend, tracingContext }) => {
       const { issues, ...extracted } = inputData;
       // Warnings are kept in the run but only errors need a person.
       if (!issues.some((issue) => issue.severity === "error")) {
@@ -213,11 +242,15 @@ export function createProcessDocumentWorkflow(deps: {
       }
       if (!resumeData) {
         await setDocumentStatus(db, extracted.documentId, "needs_review");
-        return await suspend({
+        const request = {
           documentId: extracted.documentId,
           issues,
           question: buildReviewQuestion(issues),
-        });
+        };
+        // A suspended step ends without output: record the question on its span.
+        setStepOutput(tracingContext, request);
+        setBranch(tracingContext, "needs_review");
+        return await suspend(request);
       }
       return {
         ...extracted,
@@ -231,7 +264,7 @@ export function createProcessDocumentWorkflow(deps: {
     id: "persist",
     inputSchema: ReviewedSchema,
     outputSchema: OutcomeSchema,
-    execute: async ({ inputData }) => {
+    execute: async ({ inputData, tracingContext }) => {
       const {
         documentId,
         invoice,
@@ -240,8 +273,11 @@ export function createProcessDocumentWorkflow(deps: {
         reviewedBy,
         repaired,
       } = inputData;
+      // A resumed run starts its own trace at human-review, after ingest.
+      setTraceMetadata(tracingContext, { documentId, promptVersion });
       if (!approved) {
         await setDocumentStatus(db, documentId, "rejected");
+        setBranch(tracingContext, "rejected");
         return { kind: "rejected" as const, documentId, reviewedBy };
       }
       const invoiceId = await saveInvoice(
@@ -251,6 +287,7 @@ export function createProcessDocumentWorkflow(deps: {
         promptVersion,
       );
       await setDocumentStatus(db, documentId, "valid");
+      setBranch(tracingContext, repaired ? "repaired" : "accepted");
       return {
         kind: "accepted" as const,
         documentId,

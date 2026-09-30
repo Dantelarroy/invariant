@@ -4,7 +4,14 @@ export {
   loadDataset,
   MEDIA_TYPES,
 } from "./dataset.js";
-export { type Extract, evaluateDocuments, type Repair } from "./run.js";
+export {
+  type DocumentTrace,
+  type DocumentTracer,
+  type Extract,
+  type Extraction,
+  evaluateDocuments,
+  type Repair,
+} from "./run.js";
 export {
   type ExtractionScore,
   type FieldResult,

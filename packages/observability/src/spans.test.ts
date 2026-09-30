@@ -46,16 +46,19 @@ describe("withGeneration", () => {
     await exporter.flush();
 
     expect(returned).toBe(result);
-    const [generation] = exporter.getSpansByType(SpanType.MODEL_GENERATION);
+    const [generation] = exporter.getSpansByType(SpanType.MODEL_INFERENCE);
     expect(generation?.name).toBe("extract-text-v1");
     expect(generation?.parentSpanId).toBe(step.id);
     expect(generation?.endTime).toBeDefined();
-    expect(generation?.attributes?.model).toBe("gpt-5-mini-2025-08-07");
+    expect(generation?.attributes?.responseModel).toBe("gpt-5-mini-2025-08-07");
     expect(generation?.attributes?.usage).toEqual({
       inputTokens: 1200,
       outputTokens: 300,
     });
-    expect(generation?.metadata?.promptVersion).toBe("extract-text-v1");
+    expect(generation?.metadata).toMatchObject({
+      promptVersion: "extract-text-v1",
+      requestedModel: "gpt-5-mini",
+    });
   });
 
   it("ends the generation with the error and rethrows the original error", async () => {
@@ -75,7 +78,7 @@ describe("withGeneration", () => {
     run.end();
     await exporter.flush();
 
-    const [generation] = exporter.getSpansByType(SpanType.MODEL_GENERATION);
+    const [generation] = exporter.getSpansByType(SpanType.MODEL_INFERENCE);
     expect(generation?.endTime).toBeDefined();
     expect(generation?.errorInfo?.message).toBe("model timed out");
   });
