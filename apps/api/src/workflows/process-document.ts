@@ -19,6 +19,7 @@ import {
 import {
   type GenerationRef,
   type PromptResolver,
+  type ReviewQueueSink,
   type ScoreSink,
   setBranch,
   setStepOutput,
@@ -146,6 +147,8 @@ export function createProcessDocumentWorkflow(deps: {
   resolvePrompt?: PromptResolver | undefined;
   /** Sends rule results as scores of the verified generation (ADR-0012). */
   scores?: ScoreSink | undefined;
+  /** Queues the generation of a paused run for review in Langfuse (ADR-0013). */
+  reviewQueue?: ReviewQueueSink | undefined;
 }) {
   const { db, model } = deps;
   const resolvePrompt = deps.resolvePrompt ?? localPrompts;
@@ -295,6 +298,8 @@ export function createProcessDocumentWorkflow(deps: {
         promptVersion: repaired.promptVersion,
         issues,
         repaired: true,
+        // The reviewer corrects the extraction that was chosen.
+        ...(generation ? { generation } : {}),
       };
     },
   });
@@ -328,6 +333,16 @@ export function createProcessDocumentWorkflow(deps: {
         // A suspended step ends without output: record the question on its span.
         setStepOutput(tracingContext, request);
         setBranch(tracingContext, "needs_review");
+        // First suspend only (a resume carries resumeData). Tracing off means no
+        // generation and no queue; a queue failure is logged, never thrown.
+        if (extracted.generation && deps.reviewQueue) {
+          try {
+            deps.reviewQueue.enqueue(extracted.generation);
+            setTraceMetadata(tracingContext, { queued: true });
+          } catch (error) {
+            console.warn("[review] could not queue for review:", error);
+          }
+        }
         return await suspend(request);
       }
       // A correction only counts when the reviewer approves (ADR-0013).

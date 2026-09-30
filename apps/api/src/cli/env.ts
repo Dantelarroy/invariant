@@ -5,6 +5,7 @@ import { createDb } from "@invariant/db";
 import {
   createObservability,
   createPromptResolver,
+  createReviewQueue,
   createScoreSink,
 } from "@invariant/observability";
 import { formatMoney } from "@invariant/schema";
@@ -38,6 +39,8 @@ export function createCliContext() {
     resolvePrompt: createPromptResolver(process.env),
     // Rule results as scores of each verified generation (ADR-0012).
     scores: createScoreSink(process.env, { environment: "pipeline" }),
+    // Paused runs go to the Langfuse review queue (ADR-0013).
+    reviewQueue: createReviewQueue(process.env),
   });
   return {
     mastra,

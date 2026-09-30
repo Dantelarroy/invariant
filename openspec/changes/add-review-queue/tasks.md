@@ -10,8 +10,8 @@
 
 ## 3. Queue, sync and export
 
-- [ ] 3.1 RED/GREEN, with a fake `fetch`: `ensureReviewQueue` (lazy creation of the queue and the verdict config), `enqueueForReview` (no duplicates), `listCompletedReviews` (items joined with verdict and correction, correction choice per design 4). Verify with `pnpm test packages/observability`.
-- [ ] 3.2 Enqueue in `human-review` on first suspend when tracing is on, and add `runId` to the trace metadata. Add a workflow test with a fake queue: one item per paused document, and a Langfuse failure still pauses. Verify with `pnpm test apps/api`.
+- [x] 3.1 RED/GREEN, with a fake `fetch`: `ensureReviewQueue` (lazy creation of the queue and the verdict config), `enqueueForReview` (no duplicates), `listCompletedReviews` (items joined with verdict and correction, correction choice per design 4). Verify with `pnpm test packages/observability`.
+- [x] 3.2 Enqueue in `human-review` on first suspend when tracing is on, and add `runId` to the trace metadata. Add a workflow test with a fake queue: one item per paused document, and a Langfuse failure still pauses. Verify with `pnpm test apps/api`.
 - [ ] 3.3 RED/GREEN: the pure sync planning (`correct` → approve, `corrected` + valid → approve with invoice, `corrected` + invalid → report, `unusable` → reject, not paused → skip, no verdict → report), then the `review:sync` CLI. Verify with `pnpm test apps/api`.
 - [ ] 3.4 RED/GREEN: the pure golden merge (upsert by document id, excluding `unusable`, sorted), then the `golden:export` CLI. Verify with `pnpm test apps/api`.
 - [ ] 3.5 Write ADR-0013, link it from `docs/architecture.md`, and write `docs/review.md` (how to review in Langfuse: verdict, corrected output in cents with an example, then sync and export). Verify that the links resolve.
