@@ -4,14 +4,33 @@ import {
   type ScoredField,
 } from "./score.js";
 
+export type Usage = {
+  inputTokens: number | undefined;
+  outputTokens: number | undefined;
+};
+
 /** One document of an eval run: its score plus what the extraction cost. */
 export type DocumentResult = {
   id: string;
+  /** With repair, the score of the extraction that was kept. */
   score: ExtractionScore;
-  usage: { inputTokens: number | undefined; outputTokens: number | undefined };
+  /** With repair, extraction and repair tokens added up. */
+  usage: Usage;
   latencyMs: number;
   /** Set when the extraction threw; the score then mismatches every field. */
   error?: string;
+  /** Only in runs with repair (ADR-0010): what happened before and during it. */
+  repair?: {
+    /** True when the first extraction had rule errors and a repair was requested. */
+    attempted: boolean;
+    /** True when the repaired extraction was kept (it had fewer errors). */
+    used: boolean;
+    scoreBefore: ExtractionScore;
+    usageBefore: Usage;
+    latencyMsBefore: number;
+    /** Set when the repair call threw; the first extraction is kept. */
+    error?: string;
+  };
 };
 
 export type Summary = {
@@ -66,5 +85,36 @@ export function summarize(results: readonly DocumentResult[]): Summary {
       0,
     ),
     medianLatencyMs: median(results.map((r) => r.latencyMs)),
+  };
+}
+
+export type RepairSummary = {
+  /** The first extractions, as if there were no repair. */
+  before: Summary;
+  /** The extractions that were kept after repair. */
+  after: Summary;
+  repairsAttempted: number;
+  repairsUsed: number;
+};
+
+/** Before and after summaries of a run with repair (ADR-0010). */
+export function summarizeRepair(
+  results: readonly DocumentResult[],
+): RepairSummary {
+  const firstAttempts = results.map((r) =>
+    r.repair
+      ? {
+          ...r,
+          score: r.repair.scoreBefore,
+          usage: r.repair.usageBefore,
+          latencyMs: r.repair.latencyMsBefore,
+        }
+      : r,
+  );
+  return {
+    before: summarize(firstAttempts),
+    after: summarize(results),
+    repairsAttempted: results.filter((r) => r.repair?.attempted).length,
+    repairsUsed: results.filter((r) => r.repair?.used).length,
   };
 }

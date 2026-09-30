@@ -4,7 +4,7 @@ export {
   loadDataset,
   MEDIA_TYPES,
 } from "./dataset.js";
-export { type Extract, evaluateDocuments } from "./run.js";
+export { type Extract, evaluateDocuments, type Repair } from "./run.js";
 export {
   type ExtractionScore,
   type FieldResult,
@@ -13,4 +13,11 @@ export {
   type ScoredField,
   scoreExtraction,
 } from "./score.js";
-export { type DocumentResult, type Summary, summarize } from "./summarize.js";
+export {
+  type DocumentResult,
+  type RepairSummary,
+  type Summary,
+  summarize,
+  summarizeRepair,
+  type Usage,
+} from "./summarize.js";

@@ -67,3 +67,37 @@ Every other field stays at 100 %, except the JPEG invoice number at 90 %. Report
 
   The `tax-ids` rule catches all of them except the wrong-but-consistent invoice number in `synth-000018`, which is still silent.
 - **Next levers for photos:** a frontier fallback triggered by rule failures (the cascade), or a higher-resolution image. Prompt wording has done its part.
+
+## Rule-guided repair (2026-09-30)
+
+`pnpm eval:extract --dataset data/synth --format jpg --limit 20 --repair`, gpt-5-mini, `extract-document-v2` + `repair-v1`. Every extraction with rule errors is extracted once more with only the violated error rules and the same image, and the better one is kept: no errors wins, otherwise fewer errors, and a tie keeps the original ([ADR-0010](adr/0010-rule-guided-repair.md)). "Before" scores the first extraction and "after" the one that was kept; tokens and latency after repair include the repair calls.
+
+| Metric | Before repair | After repair |
+|---|---:|---:|
+| Invoice number | 90.0 % | 90.0 % |
+| Supplier tax id | 75.0 % | 75.0 % |
+| Customer tax id | 90.0 % | 90.0 % |
+| **Exact match** | 70.0 % | 70.0 % |
+| **Rule pass** | 75.0 % | 75.0 % |
+| Failures | 0 | 0 |
+| Tokens in / out | 31,703 / 28,914 | 40,300 / 36,123 |
+| Median latency | 9,983.5 ms | 11,956.5 ms |
+| Repairs attempted | | 5 |
+| Repairs used | | 0 |
+
+Every other field stays at 100 % on both sides. Report: `synth-gpt-5-mini-20260930T055126.json`.
+
+- **Repair fixed nothing on these photos.** The 5 attempts are exactly the 5 documents failing `tax-ids` (`synth-000002`, `-000004`, `-000005`, `-000015`, `-000020`). Every repaired extraction still failed `tax-ids`, so each was a tie and the original was kept. Reading again with the failed check in hand does not recover a character the image does not show clearly: the next lever remains a stronger reader (the cascade) or a higher-resolution image.
+- **The selection rule did its job.** No repaired extraction replaced a first one without fewer errors, so accuracy could not drop. The cost was one extra call on 5 of 20 documents: +27 % input and +25 % output tokens over the run.
+- **`synth-000018` stays silent.** Its misread invoice number passes every rule, so it is never repaired.
+- **What the report cannot say yet:** whether the repaired tax ids were the same misread or a different one, because the report keeps only the scores of the extraction that was kept.
+
+### The question for a wrong printed total
+
+`fixtures/text/invoice-002-wrong-total.txt` prints base 85,00 €, VAT 17,85 € and total 112,85 € (base + VAT is 102,85 €). `pnpm extract:text fixtures/text/invoice-002-wrong-total.txt` answered `↺ already processed (document 46560e82-95c9-4d39-a6c2-436ba80d9206)`: the same file was processed before this change, and idempotency (by SHA-256) stops a second run, so no repair or question was produced by that command.
+
+Verifying the values printed on the fixture gives one error, `total` ("Total is 112,85 € but base + VAT − withholding is 102,85 €."), and the question the workflow asks for it is:
+
+> El total impreso es 112,85 € pero base + IVA − retención da 102,85 €. ¿El total del documento es 112,85 €?
+
+That question comes from `buildReviewQuestion` on those values, not from a model run. To see the full path with a real model, process the fixture as a new document, for example after rejecting its earlier run (`pnpm review <run-id> reject` makes a document retryable) or from a copy with one byte changed.
