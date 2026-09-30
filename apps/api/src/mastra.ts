@@ -1,5 +1,6 @@
 import type { Db } from "@invariant/db";
 import { Mastra } from "@mastra/core";
+import type { ObservabilityEntrypoint } from "@mastra/core/observability";
 import { PostgresStore } from "@mastra/pg";
 import type { LanguageModel } from "ai";
 import type { z } from "zod";
@@ -14,11 +15,13 @@ import {
 /**
  * Mastra keeps workflow snapshots (the state of paused runs) in the same
  * Postgres, in its own "mastra" schema so its tables never mix with ours.
+ * With `observability` (see @invariant/observability), every run is traced.
  */
 export function createInvariantMastra(deps: {
   db: Db;
   model: LanguageModel;
   databaseUrl: string;
+  observability?: ObservabilityEntrypoint | undefined;
 }) {
   const storage = new PostgresStore({
     id: "invariant-workflows",
@@ -29,8 +32,10 @@ export function createInvariantMastra(deps: {
     storage,
     logger: false,
     workflows: { processDocument: createProcessDocumentWorkflow(deps) },
+    ...(deps.observability ? { observability: deps.observability } : {}),
   });
-  return { mastra, close: () => storage.close() };
+  // shutdown() flushes pending traces, then closes the storage.
+  return { mastra, close: () => mastra.shutdown() };
 }
 
 export type InvariantMastra = ReturnType<
@@ -66,13 +71,25 @@ function toRunResult(runId: string, result: WorkflowResult): RunResult {
   throw new Error(`Workflow run ${runId} ended with status ${result.status}`);
 }
 
+/** Every workflow trace is tagged "pipeline"; its branch tag is added by the run. */
+const PIPELINE_TAGS = ["pipeline"];
+
 /** Starts processing a document. Returns the outcome, or a pending review. */
 export async function processDocument(
   mastra: InvariantMastra,
   input: { text: string; filename?: string },
 ): Promise<RunResult> {
   const run = await mastra.getWorkflow("processDocument").createRun();
-  return toRunResult(run.runId, await run.start({ inputData: input }));
+  return toRunResult(
+    run.runId,
+    await run.start({
+      inputData: input,
+      tracingOptions: {
+        metadata: input.filename ? { filename: input.filename } : {},
+        tags: PIPELINE_TAGS,
+      },
+    }),
+  );
 }
 
 /** Resumes a paused run with the reviewer's decision (works after restarts). */
@@ -84,6 +101,10 @@ export async function reviewDocument(
   const run = await mastra.getWorkflow("processDocument").createRun({ runId });
   return toRunResult(
     runId,
-    await run.resume({ step: HUMAN_REVIEW_STEP_ID, resumeData: decision }),
+    await run.resume({
+      step: HUMAN_REVIEW_STEP_ID,
+      resumeData: decision,
+      tracingOptions: { metadata: { resumed: true }, tags: PIPELINE_TAGS },
+    }),
   );
 }

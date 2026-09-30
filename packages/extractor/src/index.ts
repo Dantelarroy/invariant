@@ -7,6 +7,7 @@ export {
 export { extractInvoiceFromText } from "./extract-from-text.js";
 export type { ExtractionResult } from "./extract-with-model.js";
 export { EXTRACT_DOCUMENT_PROMPT_VERSION } from "./prompts/extract-document-v2.js";
+export { EXTRACT_TEXT_PROMPT_VERSION } from "./prompts/extract-text-v1.js";
 export {
   formatFailedChecks,
   REPAIR_INSTRUCTIONS,

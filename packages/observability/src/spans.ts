@@ -39,11 +39,18 @@ function rootOf(tracing: TracingContext | undefined): AnySpan | undefined {
 }
 
 /**
- * Runs one model call inside a MODEL_GENERATION span named after the prompt
- * version. The span ends with the model id the provider answered with and the
- * input/output token totals (only totals: Langfuse infers the cost from them,
- * and sending reasoning tokens separately would count them twice). On failure
- * it ends with the error and the original error is rethrown.
+ * Runs one model call inside a span that Langfuse shows as a generation named
+ * after the prompt version. The span ends with the model id the provider
+ * answered with and the input/output token totals (only totals: Langfuse
+ * infers the cost from them, and sending reasoning tokens separately would
+ * count them twice). On failure it ends with the error and the original error
+ * is rethrown.
+ *
+ * It is a MODEL_INFERENCE span, not MODEL_GENERATION: with @mastra/core 1.69
+ * and @mastra/observability 1.18, the OpenTelemetry export puts model and
+ * usage only on MODEL_INFERENCE spans. The model goes in `responseModel`
+ * because a `model` attribute renames the span to "chat <model>" and the
+ * prompt version would be lost (both verified against Langfuse 4.47).
  */
 export async function withGeneration<T extends GenerationResult>(
   tracing: TracingContext | undefined,
@@ -52,10 +59,9 @@ export async function withGeneration<T extends GenerationResult>(
 ): Promise<T> {
   const span = safely(() =>
     tracing?.currentSpan?.createChildSpan({
-      type: SpanType.MODEL_GENERATION,
+      type: SpanType.MODEL_INFERENCE,
       name: options.name,
-      attributes: { model: options.model },
-      metadata: { promptVersion: options.name },
+      metadata: { promptVersion: options.name, requestedModel: options.model },
     }),
   );
   let result: T;
@@ -73,7 +79,7 @@ export async function withGeneration<T extends GenerationResult>(
   safely(() =>
     span?.end({
       attributes: {
-        model: result.modelId,
+        responseModel: result.modelId,
         usage: {
           ...(result.usage.inputTokens === undefined
             ? {}
@@ -113,4 +119,15 @@ export function setBranch(
     );
     root.tags = [...others, branch];
   });
+}
+
+/**
+ * Records what the current step produced when the engine does not, e.g. the
+ * review request of a step that suspends (a suspended step ends without output).
+ */
+export function setStepOutput(
+  tracing: TracingContext | undefined,
+  output: unknown,
+): void {
+  safely(() => tracing?.currentSpan?.update({ output }));
 }

@@ -2,13 +2,18 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { openai } from "@ai-sdk/openai";
 import { createDb } from "@invariant/db";
+import { createObservability } from "@invariant/observability";
 import { formatMoney } from "@invariant/schema";
 import { createInvariantMastra, type RunResult } from "../mastra.js";
 
 const envPath = fileURLToPath(new URL("../../../../.env", import.meta.url));
 if (existsSync(envPath)) process.loadEnvFile(envPath);
 
-/** Wires the real dependencies (Postgres + OpenAI) for command-line use. */
+/**
+ * Wires the real dependencies (Postgres + OpenAI) for command-line use.
+ * Traces go to Langfuse only when LANGFUSE_BASE_URL is set (ADR-0011);
+ * `close()` flushes them before the process exits.
+ */
 export function createCliContext() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl)
@@ -22,6 +27,9 @@ export function createCliContext() {
     db,
     model: openai(modelId),
     databaseUrl,
+    observability: createObservability(process.env, {
+      environment: "pipeline",
+    }),
   });
   return {
     mastra,

@@ -16,11 +16,11 @@
 
 ## 3. Workflow and eval tracing
 
-- [ ] 3.1 RED/GREEN, a workflow test with an in-memory exporter: an accepted run has the six step spans, one generation named `extract-text-v1` and branch `accepted`; a repaired run has two generations and branch `repaired`; a paused run has branch `needs_review`. Wire `createObservability` into `createInvariantMastra`, `tracingOptions` into `processDocument` / `reviewDocument`, `withGeneration` into extract and repair, `setBranch` into the terminal steps, and flush in the CLIs. Verify with `pnpm test apps/api`.
-- [ ] 3.2 RED/GREEN: `createEvalTracer` for the eval runner. Verify with `pnpm test packages/evals`. Cover:
+- [x] 3.1 RED/GREEN, a workflow test with an in-memory exporter: an accepted run has the six step spans, one generation named `extract-text-v1` and branch `accepted`; a repaired run has two generations and branch `repaired`; a paused run has branch `needs_review`. Wire `createObservability` into `createInvariantMastra`, `tracingOptions` into `processDocument` / `reviewDocument`, `withGeneration` into extract and repair, `setBranch` into the terminal steps, and flush in the CLIs. Verify with `pnpm test apps/api`.
+- [x] 3.2 RED/GREEN: `createEvalTracer` for the eval runner. Verify with `pnpm test packages/evals`. Cover:
   - one trace per document with its generation(s) and metadata, and no bytes in the input (a fake processor test);
   - with tracing off, the runner behaves exactly as before.
-- [ ] 3.3 Write `docs/adr/0011-observability.md` (self-hosted and opt-in, trace contents, branch, bytes excluded, real data stays local) and link it from `docs/architecture.md`. Verify that the link resolves.
+- [x] 3.3 Write `docs/adr/0011-observability.md` (self-hosted and opt-in, trace contents, branch, bytes excluded, real data stays local) and link it from `docs/architecture.md`. Verify that the link resolves.
 
 ## 4. Report and the 50-document run
 

@@ -9,6 +9,7 @@ import {
   REPAIR_PROMPT_VERSION,
   repairInvoice,
 } from "@invariant/extractor";
+import { createEvalTracer } from "@invariant/observability";
 import {
   type DatasetItem,
   type DocumentFormat,
@@ -79,14 +80,24 @@ const documentOf = (item: DatasetItem) => ({
   mediaType: item.mediaType,
 });
 
+// One trace per document in Langfuse, only when LANGFUSE_BASE_URL is set (ADR-0011).
+const tracer = createEvalTracer(process.env, {
+  dataset: values.dataset,
+  model: modelId,
+  promptVersion: EXTRACT_DOCUMENT_PROMPT_VERSION,
+  ...(withRepair ? { repairPromptVersion: REPAIR_PROMPT_VERSION } : {}),
+});
+
 console.log(
   `${items.length} documents · ${modelId} · ${EXTRACT_DOCUMENT_PROMPT_VERSION}${withRepair ? ` + ${REPAIR_PROMPT_VERSION}` : ""} · ${format}`,
 );
+if (tracer) console.log(`tracing to ${process.env.LANGFUSE_BASE_URL}`);
 const documents = await evaluateDocuments(
   items,
   (item) => extractInvoiceFromDocument(documentOf(item), model),
   {
     today,
+    ...(tracer ? { tracer } : {}),
     ...(withRepair
       ? {
           repair: (item, issues) =>
@@ -113,6 +124,8 @@ const documents = await evaluateDocuments(
     },
   },
 );
+// Sends the pending traces before anything else can exit the process.
+await tracer?.shutdown();
 const summary = summarize(documents);
 const repairSummary = withRepair ? summarizeRepair(documents) : undefined;
 

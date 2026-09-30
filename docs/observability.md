@@ -1,6 +1,6 @@
 # Observability
 
-Every processed or evaluated document can leave one trace in a local, self-hosted [Langfuse](https://langfuse.com) v4: its steps, model calls, tokens, cost and latency. Decisions are in ADR-0011.
+Every processed or evaluated document can leave one trace in a local, self-hosted [Langfuse](https://langfuse.com) v4: its steps, model calls, tokens, cost and latency. Decisions are in [ADR-0011](adr/0011-observability.md).
 
 ## Start and stop
 
