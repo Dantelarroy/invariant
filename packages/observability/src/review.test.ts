@@ -164,6 +164,7 @@ function score(row: {
   timestamp: string;
   dataType?: string;
   configId?: string | null;
+  authorUserId?: string;
 }): Row {
   return {
     id: `${row.name}-${row.timestamp}-${row.source ?? "ANNOTATION"}`,
@@ -174,6 +175,7 @@ function score(row: {
     source: row.source ?? "ANNOTATION",
     timestamp: row.timestamp,
     configId: row.configId ?? null,
+    authorUserId: row.authorUserId ?? null,
     subject: {
       kind: "observation",
       id: row.observationId,
@@ -289,6 +291,7 @@ describe("listCompletedReviews", () => {
         traceId: "t1",
         timestamp: "2026-09-30T12:59:30Z",
         configId: verdictConfigId,
+        authorUserId: "user-1",
       }),
       score({
         name: "output",
@@ -315,6 +318,7 @@ describe("listCompletedReviews", () => {
         observationId: "o1",
         completedAt: "2026-09-30T13:00:00Z",
         verdict: "corrected",
+        reviewer: "user-1",
         correction: '{"totalCents":10285}',
         generation: {
           traceId: "t1",
@@ -330,6 +334,7 @@ describe("listCompletedReviews", () => {
         observationId: "o2",
         completedAt: "2026-09-30T13:00:00Z",
         verdict: undefined,
+        reviewer: undefined,
         correction: undefined,
         generation: expect.objectContaining({ runId: "run-o2", traceId: "t2" }),
       },

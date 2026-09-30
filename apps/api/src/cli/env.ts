@@ -44,6 +44,7 @@ export function createCliContext() {
   });
   return {
     mastra,
+    db,
     modelId,
     close: async () => {
       await closeMastra();

@@ -44,6 +44,8 @@ export interface CompletedReview {
   completedAt: string | null;
   /** Undefined when no verdict was set, or its label is unknown. */
   verdict: Verdict | undefined;
+  /** The Langfuse user who set the verdict, when known. */
+  reviewer: string | undefined;
   /** The corrected output as typed (a JSON string), when there is one. */
   correction: string | undefined;
   /** Undefined when the generation cannot be read back. */
@@ -296,6 +298,7 @@ interface ScoreRow {
   source: string;
   timestamp: string;
   configId?: string | null;
+  authorUserId?: string | null;
   subject?: { kind?: string; id?: string; traceId?: string | null };
 }
 
@@ -363,6 +366,7 @@ export async function listCompletedReviews(
       observationId: item.objectId,
       completedAt: item.completedAt ?? null,
       verdict,
+      reviewer: verdictScore?.authorUserId ?? undefined,
       correction: correction?.value,
       generation,
     });
