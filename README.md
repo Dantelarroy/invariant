@@ -24,6 +24,8 @@ docker compose up -d                       # Postgres on localhost:5433, EN16931
 pnpm db:migrate
 pnpm extract:text fixtures/text/invoice-001.txt   # needs OPENAI_API_KEY in .env
 pnpm review <run-id> approve|reject        # answer a paused run
+pnpm synth:review --count 12               # text invoices with one printed error, in data/review-fixtures
+pnpm review:sync && pnpm golden:export     # apply Langfuse reviews, then write data/golden (docs/review.md)
 pnpm synth --count 50                      # synthetic Spanish invoices in data/synth
 pnpm erp:up && pnpm erp:setup              # local FacturaScripts (real invoicing software)
 pnpm synth:erp --count 50                  # invoices printed by FacturaScripts in data/synth-erp

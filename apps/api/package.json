@@ -6,7 +6,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "extract:text": "tsx src/cli/extract-text.ts",
-    "review": "tsx src/cli/review.ts"
+    "review": "tsx src/cli/review.ts",
+    "review:sync": "tsx src/cli/review-sync.ts",
+    "golden:export": "tsx src/cli/golden-export.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.74",

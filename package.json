@@ -13,6 +13,8 @@
     "db:migrate": "pnpm --filter @invariant/db migrate",
     "extract:text": "pnpm --filter @invariant/api extract:text",
     "review": "pnpm --filter @invariant/api review",
+    "review:sync": "pnpm --filter @invariant/api review:sync",
+    "golden:export": "pnpm --filter @invariant/api golden:export",
     "eval:extract": "pnpm --filter @invariant/evals eval:extract",
     "ubl:check": "pnpm --filter @invariant/ubl ubl:check",
     "py:check": "cd python/data && uv run --frozen ruff check . && uv run --frozen ruff format --check . && uv run --frozen pytest -q",
