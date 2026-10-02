@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Invoice } from "@invariant/schema";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadDataset } from "./dataset.js";
+import { loadDataset, loadSources } from "./dataset.js";
 
 const invoice: Invoice = {
   number: "F-1",
@@ -90,5 +90,99 @@ describe("loadDataset", () => {
     writeFileSync(join(dir, "a.pdf"), "x");
 
     expect(() => loadDataset(dir, { format: "pdf" })).toThrow(/a/);
+  });
+});
+
+describe("loadSources", () => {
+  /** Writes sources.jsonl (in the given order) and one empty file per name. */
+  function writeSources(
+    entries: { file: string; source: string; use: string }[],
+    files: string[],
+  ) {
+    const lines = entries.map((entry) =>
+      JSON.stringify({ ...entry, url: "https://example.com", notes: "" }),
+    );
+    writeFileSync(join(dir, "sources.jsonl"), `${lines.join("\n")}\n`);
+    for (const file of files) writeFileSync(join(dir, file), "x");
+  }
+
+  it("keeps the documents of one use, in order, without labels", () => {
+    writeSources(
+      [
+        { file: "b--two.png", source: "billeo", use: "eval" },
+        { file: "d--blank.png", source: "declarando", use: "discard" },
+        { file: "q--one.pdf", source: "quipu", use: "eval" },
+      ],
+      ["b--two.png", "d--blank.png", "q--one.pdf"],
+    );
+
+    const items = loadSources(join(dir, "sources.jsonl"), { use: "eval" });
+
+    expect(items).toEqual([
+      {
+        id: "b--two",
+        path: join(dir, "b--two.png"),
+        mediaType: "image/png",
+        source: "billeo",
+      },
+      {
+        id: "q--one",
+        path: join(dir, "q--one.pdf"),
+        mediaType: "application/pdf",
+        source: "quipu",
+      },
+    ]);
+    expect(items[0]).not.toHaveProperty("invoice");
+  });
+
+  it("infers the media type from each file's extension and applies the limit", () => {
+    writeSources(
+      [
+        { file: "w--a.JPG", source: "wikimedia", use: "eval" },
+        { file: "b--b.webp", source: "billeo", use: "eval" },
+        { file: "b--c.png", source: "billeo", use: "eval" },
+      ],
+      ["w--a.JPG", "b--b.webp"],
+    );
+
+    const items = loadSources(join(dir, "sources.jsonl"), {
+      use: "eval",
+      limit: 2,
+    });
+
+    expect(items.map((item) => item.mediaType)).toEqual([
+      "image/jpeg",
+      "image/webp",
+    ]);
+  });
+
+  it("throws before anything runs when a selected file is missing, naming it", () => {
+    writeSources(
+      [
+        { file: "a.png", source: "x", use: "eval" },
+        { file: "b.png", source: "x", use: "eval" },
+      ],
+      ["a.png"],
+    );
+
+    expect(() =>
+      loadSources(join(dir, "sources.jsonl"), { use: "eval" }),
+    ).toThrow(/b\.png/);
+  });
+
+  it("rejects a file whose extension has no media type", () => {
+    writeSources([{ file: "a.docx", source: "x", use: "eval" }], ["a.docx"]);
+
+    expect(() =>
+      loadSources(join(dir, "sources.jsonl"), { use: "eval" }),
+    ).toThrow(/a\.docx/);
+  });
+
+  it("rejects a use that selects no document", () => {
+    writeSources([{ file: "a.png", source: "x", use: "eval" }], ["a.png"]);
+
+    expect(() =>
+      loadSources(join(dir, "sources.jsonl"), { use: "train" }),
+    ).toThrow(/train/);
   });
 });

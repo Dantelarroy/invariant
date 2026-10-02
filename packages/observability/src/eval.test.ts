@@ -197,4 +197,32 @@ describe("createEvalTracer", () => {
       "langfuse.observation.status_message": "model timed out",
     });
   });
+  it("names the file and its source in the trace metadata, and leaves out exact match without a label", async () => {
+    const { tracer, exporter } = tracedWithMemory();
+
+    const trace = tracer.startDocument({
+      id: "declarando--ejemplo-factura-con-iva",
+      path: "/data/real/public/declarando--ejemplo-factura-con-iva.png",
+      mediaType: "image/png",
+      source: "declarando",
+    });
+    await trace.generation("extract", async () => extraction);
+    trace.end({ score: { rules: { valid: true, failedRuleIds: [] } } });
+    await tracer.shutdown();
+
+    const root = exporter
+      .getFinishedSpans()
+      .find((span) => span.name === "declarando--ejemplo-factura-con-iva");
+    expect(root?.attributes).toMatchObject({
+      "langfuse.trace.metadata.file": "declarando--ejemplo-factura-con-iva.png",
+      "langfuse.trace.metadata.source": "declarando",
+      "langfuse.trace.metadata.ruleValid": true,
+    });
+    expect(root?.attributes).not.toHaveProperty(
+      "langfuse.trace.metadata.exactMatch",
+    );
+    expect(root?.attributes["langfuse.observation.output"]).toBe(
+      JSON.stringify({ rules: { valid: true, failedRuleIds: [] } }),
+    );
+  });
 });

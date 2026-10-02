@@ -1,5 +1,6 @@
 import {
   type ExtractionScore,
+  type RuleScore,
   SCORED_FIELDS,
   type ScoredField,
 } from "./score.js";
@@ -9,11 +10,14 @@ export type Usage = {
   outputTokens: number | undefined;
 };
 
-/** One document of an eval run: its score plus what the extraction cost. */
-export type DocumentResult = {
+/**
+ * One document of an eval run: its score plus what the extraction cost. An
+ * unlabeled document's score is a RuleScore: its rules, no fields.
+ */
+export type DocumentResult<S extends RuleScore = ExtractionScore> = {
   id: string;
   /** With repair, the score of the extraction that was kept. */
-  score: ExtractionScore;
+  score: S;
   /** With repair, extraction and repair tokens added up. */
   usage: Usage;
   latencyMs: number;
@@ -25,12 +29,24 @@ export type DocumentResult = {
     attempted: boolean;
     /** True when the repaired extraction was kept (it had fewer errors). */
     used: boolean;
-    scoreBefore: ExtractionScore;
+    scoreBefore: S;
     usageBefore: Usage;
     latencyMsBefore: number;
     /** Set when the repair call threw; the first extraction is kept. */
     error?: string;
   };
+};
+
+/** The summary of an unlabeled run: no field accuracy, no exact match. */
+export type RuleSummary = {
+  documents: number;
+  /** Share of documents whose extraction passes the business rules. */
+  rulePassRate: number;
+  /** Extractions that threw an error. */
+  failures: number;
+  inputTokens: number;
+  outputTokens: number;
+  medianLatencyMs: number;
 };
 
 export type Summary = {
@@ -88,11 +104,31 @@ export function summarize(results: readonly DocumentResult[]): Summary {
   };
 }
 
-export type RepairSummary = {
+/** Aggregates an unlabeled run: rules, failures, tokens and latency only. */
+export function summarizeRules(
+  results: readonly DocumentResult<RuleScore>[],
+): RuleSummary {
+  return {
+    documents: results.length,
+    rulePassRate: rate(results, (r) => r.score.rules.valid),
+    failures: results.filter((r) => r.error !== undefined).length,
+    inputTokens: results.reduce(
+      (sum, r) => sum + (r.usage.inputTokens ?? 0),
+      0,
+    ),
+    outputTokens: results.reduce(
+      (sum, r) => sum + (r.usage.outputTokens ?? 0),
+      0,
+    ),
+    medianLatencyMs: median(results.map((r) => r.latencyMs)),
+  };
+}
+
+export type RepairSummary<T = Summary> = {
   /** The first extractions, as if there were no repair. */
-  before: Summary;
+  before: T;
   /** The extractions that were kept after repair. */
-  after: Summary;
+  after: T;
   repairsAttempted: number;
   repairsUsed: number;
 };
@@ -101,6 +137,20 @@ export type RepairSummary = {
 export function summarizeRepair(
   results: readonly DocumentResult[],
 ): RepairSummary {
+  return repairSides(results, summarize);
+}
+
+/** Before and after summaries of an unlabeled run with repair. */
+export function summarizeRulesRepair(
+  results: readonly DocumentResult<RuleScore>[],
+): RepairSummary<RuleSummary> {
+  return repairSides(results, summarizeRules);
+}
+
+function repairSides<S extends RuleScore, T>(
+  results: readonly DocumentResult<S>[],
+  summarizeSide: (side: readonly DocumentResult<S>[]) => T,
+): RepairSummary<T> {
   const firstAttempts = results.map((r) =>
     r.repair
       ? {
@@ -112,8 +162,8 @@ export function summarizeRepair(
       : r,
   );
   return {
-    before: summarize(firstAttempts),
-    after: summarize(results),
+    before: summarizeSide(firstAttempts),
+    after: summarizeSide(results),
     repairsAttempted: results.filter((r) => r.repair?.attempted).length,
     repairsUsed: results.filter((r) => r.repair?.used).length,
   };

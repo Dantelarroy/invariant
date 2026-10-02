@@ -4,6 +4,10 @@ How well the document extractor reads invoices, measured with `pnpm eval:extract
 
 > **Caveat.** None of these numbers is real-world accuracy. FacturaScripts prints every invoice with the same layout, and `data/synth` comes from our own templates (ADR-0007). They are regression and comparison baselines. Only the real benchmark (`data/real`, not annotated yet) will be reported as accuracy.
 
+## Unlabeled runs
+
+`pnpm eval:extract --sources data/real/public/sources.jsonl --use eval --limit 21 --repair` runs the extractor over documents that have no label yet, such as the public examples in `data/real/public`. It keeps the manifest entries whose `use` matches `--use` (default `eval`) and takes each file's media type from its extension, so one run can mix PNG, JPEG, WebP and PDF. Without a label nothing can be matched: each document is scored on the business rules only, and the summary reports documents, rule pass rate, failures, tokens and median latency, with no field accuracy or exact match (with `--repair`, before and after). Traces go to the `eval` environment like labeled runs, with the rule scores of every generation and `file` and `source` (e.g. `declarando`, `quipu`) as trace metadata, so the traces can be read by hand and filtered for error analysis.
+
 ## Day 9 baseline (2026-09-29)
 
 Prompt `extract-document-v1`, first 20 labels of each dataset, one document at a time.
