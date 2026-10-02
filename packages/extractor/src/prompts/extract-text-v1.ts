@@ -2,6 +2,7 @@ import { type PromptDefinition, promptId } from "./definition.js";
 
 /**
  * Prompt v1 for extracting an invoice from plain text.
+ * Superseded by extract-text-v2; kept so v1 runs and the registry stay reproducible.
  * Registered in Langfuse prompt management as "extract-text" version 1 (ADR-0012).
  */
 export const EXTRACT_TEXT_INSTRUCTIONS = `You extract Spanish invoices into structured data.

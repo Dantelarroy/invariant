@@ -380,18 +380,18 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
         "human-review",
         "persist",
       ]);
-      expect(generations.map((g) => g.name)).toEqual(["extract-text-v1"]);
+      expect(generations.map((g) => g.name)).toEqual(["extract-text-v2"]);
       expect(generations[0]?.attributes).toMatchObject({
         responseModel: "mock-model-id",
         usage: { inputTokens: 10, outputTokens: 10 },
       });
       // Linked to its registry prompt, with the source text in and the invoice out.
       expect(generations[0]?.metadata?.langfuse).toEqual({
-        prompt: { name: "extract-text", version: 1 },
+        prompt: { name: "extract-text", version: 2 },
       });
       // `source`, not `text`: the OTel export would turn a `text` key into a chat message.
       expect(generations[0]?.input).toEqual({
-        promptVersion: "extract-text-v1",
+        promptVersion: "extract-text-v2",
         source: text,
       });
       expect(generations[0]?.output).toEqual(invoice);
@@ -400,7 +400,7 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
         documentId: result.documentId,
         filename: "invoice.txt",
         model: "mock-model-id",
-        promptVersion: "extract-text-v1",
+        promptVersion: "extract-text-v2",
       });
       expect(root.tags).toEqual(["pipeline", "accepted"]);
     });
@@ -416,7 +416,7 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
 
       const { root, generations } = await lastTrace(exporter);
       expect(generations.map((g) => g.name)).toEqual([
-        "extract-text-v1",
+        "extract-text-v2",
         "repair-v1",
       ]);
       expect(generations[1]?.metadata?.langfuse).toEqual({
@@ -858,7 +858,7 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
         totalCents: 1210,
       });
       expect(await storedPromptVersion(paused.documentId)).toBe(
-        "extract-text-v1",
+        "extract-text-v2",
       );
     });
 
@@ -896,7 +896,7 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
         .then(
           legacyStep("extract", async () => ({
             invoice: InvoiceSchema.parse(inconsistentInvoice),
-            promptVersion: "extract-text-v1",
+            promptVersion: "extract-text-v2",
           })),
         )
         .then(
@@ -947,7 +947,7 @@ describe.skipIf(!databaseUrl)("process-document workflow (integration)", () => {
         repaired: false,
         totalCents: 1310,
       });
-      expect(await storedPromptVersion(documentId)).toBe("extract-text-v1");
+      expect(await storedPromptVersion(documentId)).toBe("extract-text-v2");
     });
   });
 });

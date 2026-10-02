@@ -6,7 +6,7 @@ import {
   extractWithModel,
 } from "./extract-with-model.js";
 import { EXTRACT_DOCUMENT_INSTRUCTIONS } from "./prompts/extract-document-v2.js";
-import { EXTRACT_TEXT_INSTRUCTIONS } from "./prompts/extract-text-v1.js";
+import { EXTRACT_TEXT_INSTRUCTIONS } from "./prompts/extract-text-v2.js";
 import {
   formatFailedChecks,
   REPAIR_INSTRUCTIONS,

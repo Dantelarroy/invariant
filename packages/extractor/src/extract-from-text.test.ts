@@ -60,8 +60,20 @@ describe("extractInvoiceFromText", () => {
     );
 
     expect(result.invoice).toEqual(invoice);
-    expect(result.promptVersion).toBe("extract-text-v1");
+    expect(result.promptVersion).toBe("extract-text-v2");
     expect(result.usage).toEqual({ inputTokens: 120, outputTokens: 80 });
+  });
+
+  it("tells the model that withholding is a positive amount and tax ids are bare", async () => {
+    const model = mockModelAnswering(modelOutput);
+
+    await extractInvoiceFromText("FACTURA F-2026-0042 ...", model);
+
+    // Day 12 review (docs/review.md): extract-text-v1 returned IRPF as a
+    // negative amount on every invoice that printed "-136,58 €".
+    const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt);
+    expect(prompt).toContain("Withholding (IRPF) is a positive amount");
+    expect(prompt).toContain("Tax IDs contain only the identifier");
   });
 
   it("returns the model id the provider answered with and the call latency", async () => {

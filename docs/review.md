@@ -121,3 +121,19 @@ Dante reviewed all 12 items in the Langfuse UI: **7 `correct`, 5 `corrected`**.
 - `FAC-2025-2454` with line rates `400,1000,1000,400`.
 
 **Finding for the next change:** `extract-text-v1` reads a printed IRPF withholding as negative, the same failure `extract-document-v2` fixed for documents. The four corrected records are the evidence for an `extract-text-v2`.
+
+### Follow-up: `extract-text-v2` (2026-10-02)
+
+`extract-text-v2` adds the two rules that `extract-document-v2` added for documents: withholding (IRPF) is a positive amount, and tax ids are bare identifiers. It is registered in Langfuse as `extract-text` version 2 (`pnpm prompts:seed`: 1 created, 4 already registered).
+
+The four fixtures that needed a withholding correction (002–005) were run again with gpt-5-mini, from copies with a marker line:
+
+| Fixture | Rules failing with v1 | Rules failing with v2 | Printed error |
+|---|---|---|---|
+| 002 | `vat-amount`, `total` | `vat-amount`, `total` | wrong VAT |
+| 003 | `tax-ids`, `total` | `tax-ids` | invalid tax id |
+| 004 | `lines-sum`, `vat-amount`, `line-amount`, `total` | `lines-sum`, `vat-amount`, `line-amount` | line amount |
+| 005 | `total` | `total` | wrong total |
+
+- **Withholding is now positive in all four.** The `total` messages compute base + VAT − withholding with the positive amount: for 005, 127,00 + 26,67 − 19,05 = 134,62 €.
+- **Only the printed errors remain.** On 003 and 004, `total` no longer fails, because the negative withholding was what broke it. That matches the four golden records. The check runs were rejected afterwards.
