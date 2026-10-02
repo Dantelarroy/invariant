@@ -65,14 +65,14 @@ describe("prompt definitions", () => {
   it("are families with numbered versions, and the old ids derive from them", () => {
     expect(EXTRACT_TEXT_PROMPT).toMatchObject({
       name: "extract-text",
-      version: 1,
+      version: 2,
     });
     expect(EXTRACT_DOCUMENT_PROMPT).toMatchObject({
       name: "extract-document",
       version: 2,
     });
     expect(REPAIR_PROMPT).toMatchObject({ name: "repair", version: 1 });
-    expect(EXTRACT_TEXT_PROMPT_VERSION).toBe("extract-text-v1");
+    expect(EXTRACT_TEXT_PROMPT_VERSION).toBe("extract-text-v2");
     expect(EXTRACT_DOCUMENT_PROMPT_VERSION).toBe("extract-document-v2");
     expect(REPAIR_PROMPT_VERSION).toBe("repair-v1");
     expect(promptId(EXTRACT_DOCUMENT_PROMPT)).toBe("extract-document-v2");
@@ -81,11 +81,12 @@ describe("prompt definitions", () => {
   it("lists every version defined in code, in seeding order, v1 included", () => {
     expect(PROMPTS.map(promptId)).toEqual([
       "extract-text-v1",
+      "extract-text-v2",
       "extract-document-v1",
       "extract-document-v2",
       "repair-v1",
     ]);
-    expect(PROMPTS[1]?.text).toBe(DOCUMENT_V1_INSTRUCTIONS);
+    expect(PROMPTS[2]?.text).toBe(DOCUMENT_V1_INSTRUCTIONS);
     for (const prompt of PROMPTS) expect(prompt.text.length).toBeGreaterThan(0);
   });
 });
@@ -100,7 +101,7 @@ describe("instructions override", () => {
 
     expect(sentTo(model)).toContain(OVERRIDE);
     expect(sentTo(model)).not.toContain("Money is integer cents");
-    expect(result.promptVersion).toBe("extract-text-v1");
+    expect(result.promptVersion).toBe("extract-text-v2");
   });
 
   it("replaces the document instructions", async () => {

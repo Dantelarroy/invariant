@@ -17,7 +17,7 @@ export {
 export {
   EXTRACT_TEXT_PROMPT,
   EXTRACT_TEXT_PROMPT_VERSION,
-} from "./prompts/extract-text-v1.js";
+} from "./prompts/extract-text-v2.js";
 export { PROMPTS } from "./prompts/index.js";
 export {
   formatFailedChecks,

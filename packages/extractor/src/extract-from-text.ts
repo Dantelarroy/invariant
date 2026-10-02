@@ -7,7 +7,7 @@ import {
 import {
   EXTRACT_TEXT_INSTRUCTIONS,
   EXTRACT_TEXT_PROMPT_VERSION,
-} from "./prompts/extract-text-v1.js";
+} from "./prompts/extract-text-v2.js";
 
 /**
  * Extracts an invoice from its plain-text content using a language model.
