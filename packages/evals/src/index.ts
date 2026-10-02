@@ -1,7 +1,9 @@
 export {
   type DatasetItem,
   type DocumentFormat,
+  type DocumentItem,
   loadDataset,
+  loadSources,
   MEDIA_TYPES,
 } from "./dataset.js";
 export {
@@ -15,16 +17,21 @@ export {
 export {
   type ExtractionScore,
   type FieldResult,
+  type RuleScore,
   type RuleVerdict,
   SCORED_FIELDS,
   type ScoredField,
   scoreExtraction,
+  scoreRules,
 } from "./score.js";
 export {
   type DocumentResult,
   type RepairSummary,
+  type RuleSummary,
   type Summary,
   summarize,
   summarizeRepair,
+  summarizeRules,
+  summarizeRulesRepair,
   type Usage,
 } from "./summarize.js";

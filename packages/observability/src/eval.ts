@@ -29,11 +29,13 @@ export interface EvalRunMeta {
   };
 }
 
-/** A dataset document: only its id, file name and media type are traced. */
+/** A dataset document: only its id, file name, media type and source are traced. */
 export interface EvalItem {
   id: string;
   path: string;
   mediaType: string;
+  /** Where an unlabeled document came from (e.g. "declarando"), to filter by. */
+  source?: string;
 }
 
 /** What one model call returns (the extractor's ExtractionResult fits). */
@@ -48,7 +50,8 @@ export interface EvalGeneration {
 /** The part of an eval document result that goes on its trace. */
 export interface EvalOutcome {
   score: {
-    exactMatch: boolean;
+    /** Absent for an unlabeled document: there is nothing to match. */
+    exactMatch?: boolean;
     rules: { valid: boolean; failedRuleIds: string[] };
   };
   error?: string;
@@ -125,6 +128,8 @@ export function createEvalTracer(
           [LangfuseOtelSpanAttributes.TRACE_TAGS]: ["eval"],
           [`${TRACE_METADATA}.dataset`]: meta.dataset,
           [`${TRACE_METADATA}.documentId`]: item.id,
+          [`${TRACE_METADATA}.file`]: input.file,
+          ...(item.source ? { [`${TRACE_METADATA}.source`]: item.source } : {}),
           [`${TRACE_METADATA}.model`]: meta.model,
           [`${TRACE_METADATA}.promptVersion`]: meta.promptVersion,
         });
@@ -153,8 +158,14 @@ export function createEvalTracer(
           safely(() => {
             if (!root) return;
             const { score, error, repair } = outcome;
+            const exactMatch =
+              score.exactMatch === undefined
+                ? {}
+                : { exactMatch: score.exactMatch };
             root.otelSpan.setAttributes({
-              [`${TRACE_METADATA}.exactMatch`]: score.exactMatch,
+              ...(score.exactMatch === undefined
+                ? {}
+                : { [`${TRACE_METADATA}.exactMatch`]: score.exactMatch }),
               [`${TRACE_METADATA}.ruleValid`]: score.rules.valid,
               [`${TRACE_METADATA}.failedRules`]:
                 score.rules.failedRuleIds.join(","),
@@ -167,7 +178,7 @@ export function createEvalTracer(
             });
             root.update({
               output: {
-                exactMatch: score.exactMatch,
+                ...exactMatch,
                 rules: score.rules,
                 ...(repair ? { repair } : {}),
                 ...(error ? { error } : {}),

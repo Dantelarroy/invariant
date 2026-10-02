@@ -31,6 +31,11 @@ export type RuleVerdict = {
   failedRuleIds: string[];
 };
 
+/** What an unlabeled document is scored on: the business rules only. */
+export type RuleScore = {
+  rules: RuleVerdict;
+};
+
 export type ExtractionScore = {
   fields: Record<ScoredField, FieldResult>;
   /** True when every scored field matches. */
@@ -107,6 +112,17 @@ export function scoreExtraction(
     exactMatch: SCORED_FIELDS.every((field) => fields[field].match),
     rules: ruleVerdict(actual, options.today),
   };
+}
+
+/**
+ * Scores an extraction without a label: only whether it passes the business
+ * rules. `actual` is null when the extraction failed (an invalid verdict).
+ */
+export function scoreRules(
+  actual: Invoice | null,
+  options: { today: string },
+): RuleScore {
+  return { rules: ruleVerdict(actual, options.today) };
 }
 
 function ruleVerdict(actual: Invoice | null, today: string): RuleVerdict {

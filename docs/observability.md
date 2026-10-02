@@ -47,7 +47,7 @@ LANGFUSE_BASE_URL=http://127.0.0.1:3000 pnpm eval:extract --dataset data/synth-e
 - Workflow runs (`extract:text`, `review`) go to the `pipeline` environment, eval runs to `eval`.
 - A workflow trace has a span per step, a generation per model call (named after the prompt version, with model, tokens, cost and latency), the document id, model and prompt version as metadata, and a branch as metadata and tag: `accepted`, `repaired`, `needs_review`, `failed`, `rejected` or `duplicate`.
 - A resumed review is a nested run inside the same trace, with its own branch. The report takes the branch of the last run.
-- An eval trace is named after the document id. Its input is the file name and media type, never the document. Its metadata holds the dataset, model, prompt version, exact match and rule verdict.
+- An eval trace is named after the document id. Its input is the file name and media type, never the document. Its metadata holds the dataset, file name, model, prompt version, exact match and rule verdict; an unlabeled document (`--sources`) has its `source` instead of an exact match.
 - If Langfuse is down, runs behave the same; the command only waits a few seconds at exit while the export gives up.
 
 ## Prompts and scores

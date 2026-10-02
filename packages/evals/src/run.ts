@@ -5,8 +5,13 @@ import {
   verifyInvoice,
 } from "@invariant/rules";
 import type { Invoice } from "@invariant/schema";
-import type { DatasetItem } from "./dataset.js";
-import { scoreExtraction } from "./score.js";
+import type { DatasetItem, DocumentItem } from "./dataset.js";
+import {
+  type ExtractionScore,
+  type RuleScore,
+  scoreExtraction,
+  scoreRules,
+} from "./score.js";
 import type { DocumentResult, Usage } from "./summarize.js";
 
 /**
@@ -21,14 +26,14 @@ export type Extraction = {
 };
 
 /** What an extractor returns for one document; it throws when extraction fails. */
-export type Extract = (item: DatasetItem) => Promise<Extraction>;
+export type Extract = (item: DocumentItem) => Promise<Extraction>;
 
 /**
  * Extracts the document once more given the first extraction's violations
  * (ADR-0010); it throws when the repair fails.
  */
 export type Repair = (
-  item: DatasetItem,
+  item: DocumentItem,
   issues: readonly Violation[],
 ) => Promise<Extraction>;
 
@@ -38,7 +43,7 @@ export type Repair = (
  * runner behaves the same without them.
  */
 export interface DocumentTracer {
-  startDocument(item: DatasetItem): DocumentTrace;
+  startDocument(item: DocumentItem): DocumentTrace;
 }
 export interface DocumentTrace {
   /** Runs one model call inside a generation; must return or rethrow what `call` does. */
@@ -48,7 +53,7 @@ export interface DocumentTrace {
   ): Promise<T>;
   /** The rule results of the last generation of that kind. */
   verified(kind: "extract" | "repair", verification: VerificationResult): void;
-  end(result: DocumentResult): void;
+  end(result: DocumentResult<RuleScore>): void;
 }
 
 type Traced = <T extends Extraction>(
@@ -71,41 +76,55 @@ const addUsage = (a: Usage, b: Usage): Usage => ({
  * With `repair`, every extraction with rule errors is repaired once and the
  * better one is kept, as the workflow does (ADR-0010). `score` is then the
  * chosen extraction's and `repair` records the score before repairing.
+ *
+ * Unlabeled documents (no `invoice`) are extracted, verified, repaired and
+ * traced the same way, but scored on their rules only (a RuleScore).
  */
-export async function evaluateDocuments(
+export function evaluateDocuments(
   items: readonly DatasetItem[],
   extract: Extract,
-  options: {
-    today: string;
-    onResult?: (result: DocumentResult) => void;
-    repair?: Repair;
-    tracer?: DocumentTracer;
-  },
-): Promise<DocumentResult[]> {
+  options: EvaluateOptions<ExtractionScore>,
+): Promise<DocumentResult[]>;
+export function evaluateDocuments(
+  items: readonly DocumentItem[],
+  extract: Extract,
+  options: EvaluateOptions<RuleScore>,
+): Promise<DocumentResult<RuleScore>[]>;
+export async function evaluateDocuments(
+  items: readonly DocumentItem[],
+  extract: Extract,
+  options: EvaluateOptions<RuleScore>,
+): Promise<DocumentResult<RuleScore>[]> {
   const { today } = options;
-  const results: DocumentResult[] = [];
+  const results: DocumentResult<RuleScore>[] = [];
   for (const item of items) {
+    // With a label, every field is compared too; without one, only the rules.
+    const scoreOf = (actual: Invoice | null): RuleScore =>
+      item.invoice
+        ? scoreExtraction(item.invoice, actual, { today })
+        : scoreRules(actual, { today });
     const started = performance.now();
     const elapsed = () => Math.round(performance.now() - started);
     const trace = options.tracer?.startDocument(item);
     const traced: Traced = (kind, call) =>
       trace ? trace.generation(kind, call) : call();
-    let result: DocumentResult;
+    let result: DocumentResult<RuleScore>;
     try {
       const { invoice, usage } = await traced("extract", () => extract(item));
       trace?.verified("extract", verifyInvoice(invoice, { today }));
-      const score = scoreExtraction(item.invoice, invoice, { today });
+      const score = scoreOf(invoice);
       result = { id: item.id, score, usage, latencyMs: elapsed() };
       if (options.repair) {
         result = await repairOnce(item, invoice, result, options.repair, {
           today,
+          scoreOf,
           elapsed,
           ...(trace ? { trace } : {}),
           traced,
         });
       }
     } catch (error) {
-      const score = scoreExtraction(item.invoice, null, { today });
+      const score = scoreOf(null);
       const usage = { inputTokens: undefined, outputTokens: undefined };
       result = {
         id: item.id,
@@ -131,23 +150,33 @@ export async function evaluateDocuments(
   return results;
 }
 
+type EvaluateOptions<S extends RuleScore> = {
+  today: string;
+  // Method syntax: a labeled run's callback also fits the implementation's.
+  onResult?(result: DocumentResult<S>): void;
+  repair?: Repair;
+  tracer?: DocumentTracer;
+};
+
 async function repairOnce(
-  item: DatasetItem,
+  item: DocumentItem,
   invoice: Invoice,
-  first: DocumentResult,
+  first: DocumentResult<RuleScore>,
   repair: Repair,
   {
     today,
+    scoreOf,
     elapsed,
     traced,
     trace,
   }: {
     today: string;
+    scoreOf: (actual: Invoice | null) => RuleScore;
     elapsed: () => number;
     traced: Traced;
     trace?: DocumentTrace;
   },
-): Promise<DocumentResult> {
+): Promise<DocumentResult<RuleScore>> {
   const before = {
     scoreBefore: first.score,
     usageBefore: first.usage,
@@ -165,9 +194,7 @@ async function repairOnce(
     const used = shouldUseRepair(errorCount(violations), repairedErrors);
     return {
       ...first,
-      score: used
-        ? scoreExtraction(item.invoice, repaired.invoice, { today })
-        : first.score,
+      score: used ? scoreOf(repaired.invoice) : first.score,
       usage: addUsage(first.usage, repaired.usage),
       latencyMs: elapsed(),
       repair: { attempted: true, used, ...before },

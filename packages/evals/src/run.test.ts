@@ -1,11 +1,14 @@
 import type { Invoice } from "@invariant/schema";
 import { describe, expect, it } from "vitest";
-import type { DatasetItem } from "./dataset.js";
+import type { DatasetItem, DocumentItem } from "./dataset.js";
 import { type DocumentTracer, evaluateDocuments } from "./run.js";
+import type { RuleScore } from "./score.js";
 import {
   type DocumentResult,
   summarize,
   summarizeRepair,
+  summarizeRules,
+  summarizeRulesRepair,
 } from "./summarize.js";
 
 const invoice: Invoice = {
@@ -175,7 +178,7 @@ describe("evaluateDocuments with a tracer", () => {
   /** Records what the runner asks the tracer to do, in order. */
   function fakeTracer() {
     const calls: string[] = [];
-    const ended: DocumentResult[] = [];
+    const ended: DocumentResult<RuleScore>[] = [];
     const tracer: DocumentTracer = {
       startDocument: (doc) => {
         calls.push(`start ${doc.id}`);
@@ -260,5 +263,79 @@ describe("evaluateDocuments with a tracer", () => {
     });
 
     expect(withoutLatency(traced)).toEqual(withoutLatency(plain));
+  });
+});
+
+describe("evaluateDocuments without labels", () => {
+  const usage = { inputTokens: 100, outputTokens: 10 };
+  const misreadTaxId: Invoice = {
+    ...invoice,
+    supplier: { name: "Proveedor SL", taxId: "B12345678" },
+  };
+  const unlabeled = (id: string): DocumentItem => ({
+    id,
+    path: `${id}.png`,
+    mediaType: "image/png",
+    source: "declarando",
+  });
+
+  it("extracts and verifies the rules, with no field scores", async () => {
+    const results = await evaluateDocuments(
+      [unlabeled("ok"), unlabeled("bad"), unlabeled("broken")],
+      async (doc) => {
+        if (doc.id === "broken") throw new Error("model timed out");
+        return { invoice: doc.id === "ok" ? invoice : misreadTaxId, usage };
+      },
+      { today: "2026-09-29" },
+    );
+
+    expect(results.map((r) => r.score)).toEqual([
+      { rules: { valid: true, failedRuleIds: [] } },
+      { rules: { valid: false, failedRuleIds: ["tax-ids"] } },
+      { rules: { valid: false, failedRuleIds: [] } },
+    ]);
+    expect(results[2]?.error).toBe("model timed out");
+    expect(summarizeRules(results)).toEqual({
+      documents: 3,
+      rulePassRate: 1 / 3,
+      failures: 1,
+      inputTokens: 200,
+      outputTokens: 20,
+      medianLatencyMs: expect.any(Number),
+    });
+  });
+
+  it("repairs documents with rule errors and reports the rules before and after", async () => {
+    const repaired: string[] = [];
+    const results = await evaluateDocuments(
+      [unlabeled("ok"), unlabeled("bad")],
+      async (doc) => ({
+        invoice: doc.id === "ok" ? invoice : misreadTaxId,
+        usage,
+      }),
+      {
+        today: "2026-09-29",
+        repair: async (doc) => {
+          repaired.push(doc.id);
+          return { invoice, usage };
+        },
+      },
+    );
+
+    expect(repaired).toEqual(["bad"]);
+    expect(results[1]?.score).toEqual({
+      rules: { valid: true, failedRuleIds: [] },
+    });
+    expect(results[1]?.repair).toMatchObject({
+      attempted: true,
+      used: true,
+      scoreBefore: { rules: { valid: false, failedRuleIds: ["tax-ids"] } },
+    });
+    const summary = summarizeRulesRepair(results);
+    expect(summary.before.rulePassRate).toBe(0.5);
+    expect(summary.after.rulePassRate).toBe(1);
+    expect(summary.repairsAttempted).toBe(1);
+    expect(summary.repairsUsed).toBe(1);
+    expect(summary.after).not.toHaveProperty("exactMatchRate");
   });
 });
